@@ -4,6 +4,7 @@ import argparse
 import os
 import subprocess
 import tempfile
+import sys
 
 
 class VMCreate:
@@ -42,8 +43,36 @@ class VMCreate:
             self._prepare_temp()
             self._download_image()
             self._convert_and_resize()
+            self._create_and_setup_vm()
         finally:
             self._cleanup()
+
+    def _create_and_setup_vm(self):
+        if subprocess.call(['vboxmanage', 'createvm', '--name', self.vm_name,
+                            '--register']) != 0:
+            raise OSError(f'Cannot create VM "{self.vm_name}".')
+        if subprocess.call(['vboxmanage', 'modifyvm', self.vm_name,
+                            '--memory', str(self.memory),
+                            '--cpus', str(self.cpus),
+                            '--boot1', 'disk',
+                            '--acpi', 'on',
+                            '--audio', 'none',
+                            '--nic1', 'nat',
+                            '--natpf1', 'guestssh,tcp,,2222,,22']) != 0:
+            raise OSError(f'Cannot modify VM "{self.vm_name}".')
+        out = subprocess.check_output(['vboxmanage', 'showvminfo',
+                                       self.vm_name],
+                                      encoding=sys.getdefaultencoding())
+        path = None
+        for line in out.split('\n'):
+            if line.startswith('Config file:'):
+                path = os.path.dirname(line.split('Config file:').strip())
+
+        if not path:
+            raise AttributeError(f'There is something wrong doing VM '
+                                 f'"{self.vm_name}" creation and registration')
+
+        self._vm_base_path = path
 
     def _prepare_temp(self):
         self._tmp = tempfile.mkdtemp()
