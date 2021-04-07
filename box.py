@@ -35,12 +35,13 @@ class VMCreate:
         self._temp_path = None
         self._disk_img = self.vm_name + '.vdi'
         self._tmp = None
+        self._vm_base_path = None
 
     def run(self):
         try:
             self._prepare_temp()
             self._download_image()
-            # self._convert_and_resize()
+            self._convert_and_resize()
         finally:
             self._cleanup()
 
@@ -73,6 +74,28 @@ class VMCreate:
 
         return False
 
+    def _convert_to_raw(self):
+        img_path = os.path.join(self.CACHE_DIR, self._img)
+        raw_path = os.path.join(self._tmp, self._img + ".raw")
+        if subprocess.call(['qemu-img', 'convert', '-O', 'raw',
+                            img_path, raw_path]) != 0:
+            raise AttributeError(f'Cannot convert image {self._img} to RAW.')
+
+    def _convert_and_resize(self):
+        self._convert_to_raw()
+        raw_path = os.path.join(self._tmp, self._img + ".raw")
+        vdi_path = os.path.join(self._tmp, self._disk_img)
+        if subprocess.call(["vboxmanage", "convertfromraw", raw_path,
+                            vdi_path]) != 0:
+            raise AttributeError(f'Cannot convert image {self._disk_img} '
+                                 'to VDI.')
+        os.unlink(raw_path)
+
+        if subprocess.call(['vboxmanage', 'modifyhd', vdi_path, '--resize',
+                            str(self.disk_size)]) != 0:
+            raise AttributeError(f'Cannot resize image {self._disk_img} to '
+                                 '{self.disk_size}.')
+
     def _download_image(self):
         if self._checksum():
             print(f'Image already downloaded: {self._img}')
@@ -91,7 +114,7 @@ class VMCreate:
             raise AttributeError('Checksum for downloaded image differ from'
                                  ' expected')
         else:
-            print(f'downloaded image {self._img}')
+            print(f'Downloaded image {self._img}')
 
     def _cleanup(self):
         subprocess.call(['rm', '-fr', self._tmp])
@@ -113,8 +136,8 @@ def main():
                         help="amount of memory in Megabytes, default 12GB")
     create.add_argument('-c', '--cpus', default=6, type=int,
                         help="amount of CPUs to be configured. Default 6.")
-    create.add_argument('-d', '--disk-size', default=20480, type=int,
-                        help="disk size to be expanded to. By default to 20GB")
+    create.add_argument('-d', '--disk-size', default=32768, type=int,
+                        help="disk size to be expanded to. By default to 32GB")
     create.add_argument('-v', '--version', default="18.04",
                         help="Ubuntu server version. Default 18.04")
 
