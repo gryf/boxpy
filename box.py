@@ -34,6 +34,26 @@ power_state:
 ''')
 
 
+class BoxError(Exception):
+    pass
+
+
+class BoxNotFound(BoxError):
+    pass
+
+
+class BoxVBoxFailure(BoxError):
+    pass
+
+
+class BoxConvertionError(BoxError):
+    pass
+
+
+class BoxSysCommandError(BoxError):
+    pass
+
+
 class VMCreate:
     """
     Create vbox VM of Ubuntu server from cloud image with the following steps:
@@ -64,8 +84,8 @@ class VMCreate:
         if not self.ssh_key_path.endswith('.pub'):
             self.ssh_key_path += '.pub'
         if not os.path.exists(self.ssh_key_path):
-            raise AttributeError(f'Cannot find default ssh public key: '
-                                 f'{self.ssh_key_path}')
+            raise BoxNotFound(f'Cannot find default ssh public key: '
+                              f'{self.ssh_key_path}')
 
         self._img = f"ubuntu-{self.ubuntu_version}-server-cloudimg-amd64.img"
         self._temp_path = None
@@ -89,7 +109,7 @@ class VMCreate:
     def _power_on_and_wait_for_ci_finish(self):
         if subprocess.call(['vboxmanage', 'startvm', self._vm_uuid, '--type',
                             'headless']) != 0:
-            raise AttributeError(f'Failed to start: {self.vm_name}.')
+            raise BoxVBoxFailure(f'Failed to start: {self.vm_name}.')
 
         # give VBox some time to actually change the state of the VM before
         # query
@@ -112,13 +132,13 @@ class VMCreate:
                             '--device', '0',
                             '--type', 'dvddrive',
                             '--medium', 'none']) != 0:
-            raise AttributeError(f'Failed to detach cloud image from '
+            raise BoxVBoxFailure(f'Failed to detach cloud image from '
                                  f'{self.vm_name} VM.')
 
         # and start it again
         if subprocess.call(['vboxmanage', 'startvm', self._vm_uuid, '--type',
                             'headless']) != 0:
-            raise AttributeError(f'Failed to start: {self.vm_name}.')
+            raise BoxVBoxFailure(f'Failed to start: {self.vm_name}.')
 
         print('You can access your VM by issuing:')
         print(f'ssh -p 2222 -i {self.ssh_key_path[:-4]} ubuntu@localhost')
@@ -154,7 +174,7 @@ class VMCreate:
         for cmd in commands:
             if subprocess.call(cmd) != 0:
                 cmd = ' '.join(cmd)
-                raise AttributeError(f'command: {cmd} has failed')
+                raise BoxVBoxFailure(f'command: {cmd} has failed')
 
     def _create_and_setup_vm(self):
         out = subprocess.check_output(['vboxmanage', 'createvm', '--name',
@@ -166,7 +186,7 @@ class VMCreate:
                 self._vm_uuid = line.split('UUID:')[1].strip()
 
         if not self._vm_uuid:
-            raise OSError(f'Cannot create VM "{self.vm_name}".')
+            raise BoxVBoxFailure(f'Cannot create VM "{self.vm_name}".')
 
         if subprocess.call(['vboxmanage', 'modifyvm', self._vm_uuid,
                             '--memory', str(self.memory),
@@ -176,7 +196,7 @@ class VMCreate:
                             '--audio', 'none',
                             '--nic1', 'nat',
                             '--natpf1', 'guestssh,tcp,,2222,,22']) != 0:
-            raise OSError(f'Cannot modify VM "{self._vm_uuid}".')
+            raise BoxVBoxFailure(f'Cannot modify VM "{self._vm_uuid}".')
         out = subprocess.check_output(['vboxmanage', 'showvminfo',
                                        self._vm_uuid],
                                       encoding=sys.getdefaultencoding())
@@ -186,7 +206,7 @@ class VMCreate:
                 path = os.path.dirname(line.split('Config file:')[1].strip())
 
         if not path:
-            raise AttributeError(f'There is something wrong doing VM '
+            raise BoxVBoxFailure(f'There is something wrong doing VM '
                                  f'"{self.vm_name}" creation and registration')
 
         self._vm_base_path = path
@@ -212,7 +232,8 @@ class VMCreate:
                             os.path.join(self._tmp, self.CLOUD_IMAGE),
                             os.path.join(self._tmp, 'user-data'),
                             os.path.join(self._tmp, 'meta-data')]) != 0:
-            raise AttributeError('Cannot create ISO image for config drive')
+            raise BoxSysCommandError('Cannot create ISO image for config '
+                                     'drive')
 
     def _prepare_temp(self):
         self._tmp = tempfile.mkdtemp()
@@ -234,7 +255,7 @@ class VMCreate:
                     break
 
         if not expected_sum:
-            raise AttributeError('Cannot find provided cloud image')
+            raise BoxError('Cannot find provided cloud image')
 
         if os.path.exists(os.path.join(self.CACHE_DIR, self._img)):
             cmd = 'sha256sum ' + os.path.join(self.CACHE_DIR, self._img)
@@ -248,7 +269,8 @@ class VMCreate:
         raw_path = os.path.join(self._tmp, self._img + ".raw")
         if subprocess.call(['qemu-img', 'convert', '-O', 'raw',
                             img_path, raw_path]) != 0:
-            raise AttributeError(f'Cannot convert image {self._img} to RAW.')
+            raise BoxConvertionError(f'Cannot convert image {self._img} to '
+                                     'RAW.')
 
     def _convert_and_resize(self):
         self._convert_to_raw()
@@ -256,8 +278,8 @@ class VMCreate:
         vdi_path = os.path.join(self._tmp, self._disk_img)
         if subprocess.call(["vboxmanage", "convertfromraw", raw_path,
                             vdi_path]) != 0:
-            raise AttributeError(f'Cannot convert image {self._disk_img} '
-                                 'to VDI.')
+            raise BoxVBoxFailure(f'Cannot convert image {self._disk_img} '
+                                 f'to VDI.')
         os.unlink(raw_path)
 
     def _download_image(self):
@@ -275,8 +297,8 @@ class VMCreate:
 
         if not self._checksum():
             # TODO: make some retry mechanism?
-            raise AttributeError('Checksum for downloaded image differ from'
-                                 ' expected')
+            raise BoxSysCommandError('Checksum for downloaded image differ '
+                                     'from expected.')
         else:
             print(f'Downloaded image {self._img}')
 
@@ -295,7 +317,7 @@ class VMDestroy:
                          'poweroff'], stderr=subprocess.DEVNULL)
         if subprocess.call(['vboxmanage', 'unregistervm', self.vm_name_or_uuid,
                             '--delete']) != 0:
-            raise AttributeError(f'Removing VM {self.vm_name_or_uuid} failed')
+            raise BoxVBoxFailure(f'Removing VM {self.vm_name_or_uuid} failed')
 
 
 def main():
