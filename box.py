@@ -286,18 +286,17 @@ class VMCreate:
         subprocess.call(['rm', '-fr', self._tmp])
 
 
-def _create(args):
-    return VMCreate(args).run()
-
-
 def main():
     parser = argparse.ArgumentParser(description="Automate deployment and "
                                      "maintenance of Ubuntu VMs using "
                                      "VirtualBox and Ubuntu cloud images")
     subparsers = parser.add_subparsers(help='supported commands')
-    create = subparsers.add_parser('create')
-    create.add_argument('name')
-    create.set_defaults(func=_create)
+
+    create = subparsers.add_parser('create', help='create and configure VM, '
+                                   'create corresponding assets, config '
+                                   'drive and run')
+    create.set_defaults(func=VMCreate)
+    create.add_argument('name', help='name of the VM')
     create.add_argument('-m', '--memory', default=12288, type=int,
                         help="amount of memory in Megabytes, default 12GB")
     create.add_argument('-c', '--cpus', default=6, type=int,
@@ -316,7 +315,7 @@ def main():
     args = parser.parse_args()
 
     try:
-        return args.func(args)
+        return args.func(args).run()
     except AttributeError:
         parser.print_help()
         parser.exit()
