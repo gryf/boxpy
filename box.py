@@ -4,7 +4,12 @@ import argparse
 import os
 import subprocess
 import tempfile
+import string
 import sys
+import uuid
+import time
+
+
 META_DATA_TPL = string.Template('''\
 instance-id: $instance_id
 local-hostname: $vmhostname
@@ -79,6 +84,43 @@ class VMCreate:
             self._power_on_and_wait_for_ci_finish()
         finally:
             self._cleanup()
+
+    def _power_on_and_wait_for_ci_finish(self):
+        if subprocess.call(['vboxmanage', 'startvm', self._vm_uuid, '--type',
+                            'headless']) != 0:
+            raise AttributeError(f'Failed to start: {self.vm_name}.')
+
+        # give VBox some time to actually change the state of the VM before
+        # query
+        time.sleep(3)
+
+        # than, let's try to see if boostraping process has finished
+        print('Waiting for cloud init to finish')
+        while True:
+            if self._vm_uuid in subprocess.getoutput('vboxmanage list '
+                                                     'runningvms'):
+                time.sleep(3)
+            else:
+                print('Done')
+                break
+
+        # detatch cloud image ISO
+        if subprocess.call(['vboxmanage', 'storageattach', self._vm_uuid,
+                            '--storagectl', 'IDE',
+                            '--port', '1',
+                            '--device', '0',
+                            '--type', 'dvddrive',
+                            '--medium', 'none']) != 0:
+            raise AttributeError(f'Failed to detach cloud image from '
+                                 f'{self.vm_name} VM.')
+
+        # and start it again
+        if subprocess.call(['vboxmanage', 'startvm', self._vm_uuid, '--type',
+                            'headless']) != 0:
+            raise AttributeError(f'Failed to start: {self.vm_name}.')
+
+        print('You can access your VM by issuing:')
+        print(f'ssh -p 2222 -i {self.ssh_key_path[:-4]} ubuntu@localhost')
 
     def _attach_images_to_vm(self):
         vdi_path = os.path.join(self._tmp, self._disk_img)
