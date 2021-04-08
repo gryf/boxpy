@@ -5,6 +5,27 @@ import os
 import subprocess
 import tempfile
 import sys
+META_DATA_TPL = string.Template('''\
+instance-id: $instance_id
+local-hostname: $vmhostname
+''')
+
+USER_DATA_TPL = string.Template('''\
+#cloud-config
+users:
+  - default
+  - name: ubuntu
+    ssh_authorized_keys:
+      - $ssh_key
+    chpasswd: { expire: False }
+    gecos: ubuntu
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: users, admin
+power_state:
+  mode: poweroff
+  timeout: 10
+  condition: True
+''')
 
 
 class VMCreate:
@@ -22,7 +43,6 @@ class VMCreate:
         - detach iso image and remove it
     """
     CLOUD_IMAGE = "ci.iso"
-    CLOUD_INIT_FINISHED_CMD = "test /var/lib/cloud/instance/boot-finished"
     CACHE_DIR = os.environ.get('XDG_CACHE_HOME',
                                os.path.expanduser('~/.cache'))
 
@@ -32,11 +52,21 @@ class VMCreate:
         self.memory = args.memory
         self.disk_size = args.disk_size
         self.ubuntu_version = args.version
+        self.hostname = args.hostname
+        self.ssh_key_path = args.key
+
+        if not self.ssh_key_path.endswith('.pub'):
+            self.ssh_key_path += '.pub'
+        if not os.path.exists(self.ssh_key_path):
+            raise AttributeError(f'Cannot find default ssh public key: '
+                                 f'{self.ssh_key_path}')
+
         self._img = f"ubuntu-{self.ubuntu_version}-server-cloudimg-amd64.img"
         self._temp_path = None
         self._disk_img = self.vm_name + '.vdi'
         self._tmp = None
         self._vm_base_path = None
+        self._vm_uuid = None
 
     def run(self):
         try:
@@ -44,14 +74,58 @@ class VMCreate:
             self._download_image()
             self._convert_and_resize()
             self._create_and_setup_vm()
+            self._create_cloud_image()
+            self._attach_images_to_vm()
+            self._power_on_and_wait_for_ci_finish()
         finally:
             self._cleanup()
 
+    def _attach_images_to_vm(self):
+        vdi_path = os.path.join(self._tmp, self._disk_img)
+
+        # couple of commands for changing the disk size, creating controllers
+        # and attaching disk and config drive to the vm.
+        # NOTE: modifymedium will register the disk image in Virtual Media
+        # Manager, while convertfromraw not.
+        commands = [['vboxmanage', 'modifymedium', 'disk', vdi_path,
+                     '--resize', str(self.disk_size), '--move',
+                     os.path.join(self._vm_base_path, self._disk_img)],
+                    ['vboxmanage', 'storagectl', self._vm_uuid, '--name',
+                     'IDE', '--add', 'ide'],
+                    ['vboxmanage', 'storagectl', self._vm_uuid, '--name',
+                     'SATA', '--add', 'sata'],
+                    ['vboxmanage', 'storageattach', self._vm_uuid,
+                     '--storagectl', 'SATA',
+                     '--port', '0',
+                     '--device', '0',
+                     '--type', 'hdd',
+                     '--medium',
+                     os.path.join(self._vm_base_path, self._disk_img)],
+                    ['vboxmanage', 'storageattach', self._vm_uuid,
+                     '--storagectl', 'IDE',
+                     '--port', '1',
+                     '--device', '0',
+                     '--type', 'dvddrive',
+                     '--medium',
+                     os.path.join(self._tmp, self.CLOUD_IMAGE)]]
+        for cmd in commands:
+            if subprocess.call(cmd) != 0:
+                cmd = ' '.join(cmd)
+                raise AttributeError(f'command: {cmd} has failed')
+
     def _create_and_setup_vm(self):
-        if subprocess.call(['vboxmanage', 'createvm', '--name', self.vm_name,
-                            '--register']) != 0:
+        out = subprocess.check_output(['vboxmanage', 'createvm', '--name',
+                                       self.vm_name, '--register'],
+                                      encoding=sys.getdefaultencoding())
+        for line in out.split('\n'):
+            print(line)
+            if line.startswith('UUID:'):
+                self._vm_uuid = line.split('UUID:')[1].strip()
+
+        if not self._vm_uuid:
             raise OSError(f'Cannot create VM "{self.vm_name}".')
-        if subprocess.call(['vboxmanage', 'modifyvm', self.vm_name,
+
+        if subprocess.call(['vboxmanage', 'modifyvm', self._vm_uuid,
                             '--memory', str(self.memory),
                             '--cpus', str(self.cpus),
                             '--boot1', 'disk',
@@ -59,14 +133,14 @@ class VMCreate:
                             '--audio', 'none',
                             '--nic1', 'nat',
                             '--natpf1', 'guestssh,tcp,,2222,,22']) != 0:
-            raise OSError(f'Cannot modify VM "{self.vm_name}".')
+            raise OSError(f'Cannot modify VM "{self._vm_uuid}".')
         out = subprocess.check_output(['vboxmanage', 'showvminfo',
-                                       self.vm_name],
+                                       self._vm_uuid],
                                       encoding=sys.getdefaultencoding())
         path = None
         for line in out.split('\n'):
             if line.startswith('Config file:'):
-                path = os.path.dirname(line.split('Config file:').strip())
+                path = os.path.dirname(line.split('Config file:')[1].strip())
 
         if not path:
             raise AttributeError(f'There is something wrong doing VM '
@@ -120,11 +194,6 @@ class VMCreate:
                                  'to VDI.')
         os.unlink(raw_path)
 
-        if subprocess.call(['vboxmanage', 'modifyhd', vdi_path, '--resize',
-                            str(self.disk_size)]) != 0:
-            raise AttributeError(f'Cannot resize image {self._disk_img} to '
-                                 '{self.disk_size}.')
-
     def _download_image(self):
         if self._checksum():
             print(f'Image already downloaded: {self._img}')
@@ -146,6 +215,8 @@ class VMCreate:
             print(f'Downloaded image {self._img}')
 
     def _cleanup(self):
+        subprocess.call(['vboxmanage', 'closemedium', 'dvd',
+                         os.path.join(self._tmp, self.CLOUD_IMAGE)])
         subprocess.call(['rm', '-fr', self._tmp])
 
 
@@ -169,7 +240,12 @@ def main():
                         help="disk size to be expanded to. By default to 32GB")
     create.add_argument('-v', '--version', default="18.04",
                         help="Ubuntu server version. Default 18.04")
-
+    create.add_argument('-n', '--hostname', default="ubuntu",
+                        help="VM hostname. Default ubuntu")
+    create.add_argument('-k', '--key',
+                        default=os.path.expanduser("~/.ssh/id_rsa"),
+                        help="SSH key to be add to the config drive. Default "
+                        "~/.ssh/id_rsa")
     completion = subparsers.add_parser('completion')
     completion.add_argument('shell', choices=['bash'],
                             help="pick shell to generate completions for")
