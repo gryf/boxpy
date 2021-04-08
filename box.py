@@ -4,6 +4,7 @@ import argparse
 import os
 import subprocess
 import tempfile
+import shutil
 import string
 import sys
 import uuid
@@ -204,8 +205,10 @@ class VMCreate:
         with open(os.path.join(self._tmp, 'user-data'), 'w') as fobj:
             fobj.write(USER_DATA_TPL.substitute({'ssh_key': ssh_pub_key}))
 
+        mkiso = 'mkisofs' if shutil.which('mkisofs') else 'genisoimage'
+
         # create ISO image
-        if subprocess.call(['mkisofs', '-J', '-R', '-V', 'cidata', '-o',
+        if subprocess.call([mkiso, '-J', '-R', '-V', 'cidata', '-o',
                             os.path.join(self._tmp, self.CLOUD_IMAGE),
                             os.path.join(self._tmp, 'user-data'),
                             os.path.join(self._tmp, 'meta-data')]) != 0:
@@ -309,9 +312,6 @@ def main():
                         default=os.path.expanduser("~/.ssh/id_rsa"),
                         help="SSH key to be add to the config drive. Default "
                         "~/.ssh/id_rsa")
-    completion = subparsers.add_parser('completion')
-    completion.add_argument('shell', choices=['bash'],
-                            help="pick shell to generate completions for")
 
     args = parser.parse_args()
 
