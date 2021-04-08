@@ -320,6 +320,19 @@ class VMDestroy:
             raise BoxVBoxFailure(f'Removing VM {self.vm_name_or_uuid} failed')
 
 
+
+class VMList:
+    def __init__(self, args):
+        self.running = args.running
+        self.long = args.long
+
+    def run(self):
+        subcommand = 'runningvms' if self.running else 'vms'
+        long_list = '-l' if self.long else '-s'
+
+        subprocess.call(['vboxmanage', 'list', subcommand, long_list])
+
+
 def main():
     parser = argparse.ArgumentParser(description="Automate deployment and "
                                      "maintenance of Ubuntu VMs using "
@@ -349,6 +362,14 @@ def main():
     destroy = subparsers.add_parser('destroy', help='destroy VM')
     destroy.add_argument('name', help='name or UUID of the VM')
     destroy.set_defaults(func=VMDestroy)
+
+    list_vms = subparsers.add_parser('list', help='list VMs')
+    list_vms.add_argument('-l', '--long', action='store_true',
+                          help='show detailed information '
+                          'about VMs')
+    list_vms.add_argument('-r', '--running', action='store_true',
+                          help='show only running VMs')
+    list_vms.set_defaults(func=VMList)
 
     args = parser.parse_args()
 
