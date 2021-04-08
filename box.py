@@ -286,6 +286,18 @@ class VMCreate:
         subprocess.call(['rm', '-fr', self._tmp])
 
 
+class VMDestroy:
+    def __init__(self, args):
+        self.vm_name_or_uuid = args.name
+
+    def run(self):
+        subprocess.call(['vboxmanage', 'controlvm', self.vm_name_or_uuid,
+                         'poweroff'], stderr=subprocess.DEVNULL)
+        if subprocess.call(['vboxmanage', 'unregistervm', self.vm_name_or_uuid,
+                            '--delete']) != 0:
+            raise AttributeError(f'Removing VM {self.vm_name_or_uuid} failed')
+
+
 def main():
     parser = argparse.ArgumentParser(description="Automate deployment and "
                                      "maintenance of Ubuntu VMs using "
@@ -311,6 +323,10 @@ def main():
                         default=os.path.expanduser("~/.ssh/id_rsa"),
                         help="SSH key to be add to the config drive. Default "
                         "~/.ssh/id_rsa")
+
+    destroy = subparsers.add_parser('destroy', help='destroy VM')
+    destroy.add_argument('name', help='name or UUID of the VM')
+    destroy.set_defaults(func=VMDestroy)
 
     args = parser.parse_args()
 
