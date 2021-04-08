@@ -148,6 +148,27 @@ class VMCreate:
 
         self._vm_base_path = path
 
+    def _create_cloud_image(self):
+        # meta-data
+        with open(os.path.join(self._tmp, 'meta-data'), 'w') as fobj:
+            fobj.write(META_DATA_TPL
+                       .substitute({'instance_id': str(uuid.uuid4()),
+                                    'vmhostname': self.hostname}))
+
+        # user-data
+        with open(self.ssh_key_path) as fobj:
+            ssh_pub_key = fobj.read().strip()
+
+        with open(os.path.join(self._tmp, 'user-data'), 'w') as fobj:
+            fobj.write(USER_DATA_TPL.substitute({'ssh_key': ssh_pub_key}))
+
+        # create ISO image
+        if subprocess.call(['mkisofs', '-J', '-R', '-V', 'cidata', '-o',
+                            os.path.join(self._tmp, self.CLOUD_IMAGE),
+                            os.path.join(self._tmp, 'user-data'),
+                            os.path.join(self._tmp, 'meta-data')]) != 0:
+            raise AttributeError('Cannot create ISO image for config drive')
+
     def _prepare_temp(self):
         self._tmp = tempfile.mkdtemp()
 
