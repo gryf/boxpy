@@ -84,6 +84,9 @@ class VMCreate:
         if not self.ssh_key_path.endswith('.pub'):
             self.ssh_key_path += '.pub'
         if not os.path.exists(self.ssh_key_path):
+            self.ssh_key_path = os.path.join(os.path.expanduser("~/.ssh"),
+                                             self.ssh_key_path)
+        if not os.path.exists(self.ssh_key_path):
             raise BoxNotFound(f'Cannot find default ssh public key: '
                               f'{self.ssh_key_path}')
 
