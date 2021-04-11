@@ -12,6 +12,8 @@ import uuid
 import xml
 
 
+CACHE_DIR = os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
+CLOUD_IMAGE = "ci.iso"
 META_DATA_TPL = string.Template('''\
 instance-id: $instance_id
 local-hostname: $vmhostname
@@ -320,32 +322,12 @@ class Image:
             print(f'Downloaded image {self._img}')
 
 
-class VMCreate:
-    """
-    Create vbox VM of Ubuntu server from cloud image with the following steps:
-        - grab the image, unless it exists in XDG_CACHE_HOME
-        - convert it to raw, than to VDI, remove raw
-        - resize it to the right size
-        - create cloud ISO image with some basic bootstrap
-        - create and register VM definition
-        - tweak its params
-        - move disk image to the Machine directory
-        - attach disk and iso images to it
-        - run and wait for initial bootstrap, than acpishutdown
-        - detach iso image and remove it
-    """
-    CLOUD_IMAGE = "ci.iso"
-    CACHE_DIR = os.environ.get('XDG_CACHE_HOME',
-                               os.path.expanduser('~/.cache'))
-
-    def __init__(self, args):
-        self.vm_name = args.name
-        self.cpus = args.cpus
-        self.memory = args.memory
-        self.disk_size = args.disk_size
-        self.ubuntu_version = args.version
-        self.hostname = args.hostname
-        self.ssh_key_path = args.key
+class IsoImage:
+    def __init__(self, hostname, ssh_key, vbox=None):
+        self._tmp = tempfile.mkdtemp()
+        self.vbox = vbox
+        self.hostname = hostname
+        self.ssh_key_path = ssh_key
 
         if not self.ssh_key_path.endswith('.pub'):
             self.ssh_key_path += '.pub'
@@ -356,129 +338,12 @@ class VMCreate:
             raise BoxNotFound(f'Cannot find default ssh public key: '
                               f'{self.ssh_key_path}')
 
-        self._img = f"ubuntu-{self.ubuntu_version}-server-cloudimg-amd64.img"
-        self._temp_path = None
-        self._disk_img = self.vm_name + '.vdi'
-        self._tmp = None
-        self._vm_base_path = None
-        self._vm_uuid = None
+    def get_generated_image(self):
+        self._create_cloud_image()
+        return os.path.join(self._tmp, CLOUD_IMAGE)
 
-    def run(self):
-        try:
-            self._prepare_temp()
-            self._download_image()
-            self._convert_and_resize()
-            self._create_and_setup_vm()
-            self._create_cloud_image()
-            self._attach_images_to_vm()
-            self._power_on_and_wait_for_ci_finish()
-        finally:
-            self._cleanup()
-
-    def _power_on_and_wait_for_ci_finish(self):
-        if subprocess.call(['vboxmanage', 'startvm', self._vm_uuid, '--type',
-                            'headless']) != 0:
-            raise BoxVBoxFailure(f'Failed to start: {self.vm_name}.')
-
-        # give VBox some time to actually change the state of the VM before
-        # query
-        time.sleep(3)
-
-        # than, let's try to see if boostraping process has finished
-        print('Waiting for cloud init to finish')
-        while True:
-            if self._vm_uuid in subprocess.getoutput('vboxmanage list '
-                                                     'runningvms'):
-                time.sleep(3)
-            else:
-                print('Done')
-                break
-
-        # detatch cloud image ISO
-        if subprocess.call(['vboxmanage', 'storageattach', self._vm_uuid,
-                            '--storagectl', 'IDE',
-                            '--port', '1',
-                            '--device', '0',
-                            '--type', 'dvddrive',
-                            '--medium', 'none']) != 0:
-            raise BoxVBoxFailure(f'Failed to detach cloud image from '
-                                 f'{self.vm_name} VM.')
-
-        # and start it again
-        if subprocess.call(['vboxmanage', 'startvm', self._vm_uuid, '--type',
-                            'headless']) != 0:
-            raise BoxVBoxFailure(f'Failed to start: {self.vm_name}.')
-
-        print('You can access your VM by issuing:')
-        print(f'ssh -p 2222 -i {self.ssh_key_path[:-4]} ubuntu@localhost')
-
-    def _attach_images_to_vm(self):
-        vdi_path = os.path.join(self._tmp, self._disk_img)
-
-        # couple of commands for changing the disk size, creating controllers
-        # and attaching disk and config drive to the vm.
-        # NOTE: modifymedium will register the disk image in Virtual Media
-        # Manager, while convertfromraw not.
-        commands = [['vboxmanage', 'modifymedium', 'disk', vdi_path,
-                     '--resize', str(self.disk_size), '--move',
-                     os.path.join(self._vm_base_path, self._disk_img)],
-                    ['vboxmanage', 'storagectl', self._vm_uuid, '--name',
-                     'IDE', '--add', 'ide'],
-                    ['vboxmanage', 'storagectl', self._vm_uuid, '--name',
-                     'SATA', '--add', 'sata'],
-                    ['vboxmanage', 'storageattach', self._vm_uuid,
-                     '--storagectl', 'SATA',
-                     '--port', '0',
-                     '--device', '0',
-                     '--type', 'hdd',
-                     '--medium',
-                     os.path.join(self._vm_base_path, self._disk_img)],
-                    ['vboxmanage', 'storageattach', self._vm_uuid,
-                     '--storagectl', 'IDE',
-                     '--port', '1',
-                     '--device', '0',
-                     '--type', 'dvddrive',
-                     '--medium',
-                     os.path.join(self._tmp, self.CLOUD_IMAGE)]]
-        for cmd in commands:
-            if subprocess.call(cmd) != 0:
-                cmd = ' '.join(cmd)
-                raise BoxVBoxFailure(f'command: {cmd} has failed')
-
-    def _create_and_setup_vm(self):
-        out = subprocess.check_output(['vboxmanage', 'createvm', '--name',
-                                       self.vm_name, '--register'],
-                                      encoding=sys.getdefaultencoding())
-        for line in out.split('\n'):
-            print(line)
-            if line.startswith('UUID:'):
-                self._vm_uuid = line.split('UUID:')[1].strip()
-
-        if not self._vm_uuid:
-            raise BoxVBoxFailure(f'Cannot create VM "{self.vm_name}".')
-
-        if subprocess.call(['vboxmanage', 'modifyvm', self._vm_uuid,
-                            '--memory', str(self.memory),
-                            '--cpus', str(self.cpus),
-                            '--boot1', 'disk',
-                            '--acpi', 'on',
-                            '--audio', 'none',
-                            '--nic1', 'nat',
-                            '--natpf1', 'guestssh,tcp,,2222,,22']) != 0:
-            raise BoxVBoxFailure(f'Cannot modify VM "{self._vm_uuid}".')
-        out = subprocess.check_output(['vboxmanage', 'showvminfo',
-                                       self._vm_uuid],
-                                      encoding=sys.getdefaultencoding())
-        path = None
-        for line in out.split('\n'):
-            if line.startswith('Config file:'):
-                path = os.path.dirname(line.split('Config file:')[1].strip())
-
-        if not path:
-            raise BoxVBoxFailure(f'There is something wrong doing VM '
-                                 f'"{self.vm_name}" creation and registration')
-
-        self._vm_base_path = path
+    def cleanup(self):
+        subprocess.call(['rm', '-fr', self._tmp])
 
     def _create_cloud_image(self):
         # meta-data
@@ -498,147 +363,77 @@ class VMCreate:
 
         # create ISO image
         if subprocess.call([mkiso, '-J', '-R', '-V', 'cidata', '-o',
-                            os.path.join(self._tmp, self.CLOUD_IMAGE),
+                            os.path.join(self._tmp, CLOUD_IMAGE),
                             os.path.join(self._tmp, 'user-data'),
                             os.path.join(self._tmp, 'meta-data')]) != 0:
             raise BoxSysCommandError('Cannot create ISO image for config '
                                      'drive')
 
-    def _prepare_temp(self):
-        self._tmp = tempfile.mkdtemp()
 
-    def _checksum(self):
-        expected_sum = None
-        fname = 'SHA256SUMS'
-        url = "https://cloud-images.ubuntu.com/releases/"
-        url += f"{self.ubuntu_version}/release/{fname}"
-        # TODO: make the verbosity switch be dependent from verbosity of the
-        # script.
-        subprocess.call(['wget', url, '-q', '-O',
-                         os.path.join(self._tmp, fname)])
+def vmcreate(args):
+    vbox = VBoxManage(args.name)
+    vbox.create(args.cpus, args.memory)
+    vbox.create_controller('IDE', 'ide')
+    vbox.create_controller('SATA', 'sata')
 
-        with open(os.path.join(self._tmp, fname)) as fobj:
-            for line in fobj.readlines():
-                if self._img in line:
-                    expected_sum = line.split(' ')[0]
-                    break
+    image = Image(vbox, args.version)
+    path_to_disk = image.convert_to_vdi(args.name + '.vdi', args.disk_size)
 
-        if not expected_sum:
-            raise BoxError('Cannot find provided cloud image')
+    iso = IsoImage(args.hostname, args.key)
+    path_to_iso = iso.get_generated_image()
+    vbox.storageattach('SATA', 0, 'hdd', path_to_disk)
+    vbox.storageattach('IDE', 1, 'dvddrive', path_to_iso)
 
-        if os.path.exists(os.path.join(self.CACHE_DIR, self._img)):
-            cmd = 'sha256sum ' + os.path.join(self.CACHE_DIR, self._img)
-            calulated_sum = subprocess.getoutput(cmd).split(' ')[0]
-            return calulated_sum == expected_sum
+    vbox.poweron()
+    # give VBox some time to actually change the state of the VM before query
+    time.sleep(3)
 
-        return False
-
-    def _convert_to_raw(self):
-        img_path = os.path.join(self.CACHE_DIR, self._img)
-        raw_path = os.path.join(self._tmp, self._img + ".raw")
-        if subprocess.call(['qemu-img', 'convert', '-O', 'raw',
-                            img_path, raw_path]) != 0:
-            raise BoxConvertionError(f'Cannot convert image {self._img} to '
-                                     'RAW.')
-
-    def _convert_and_resize(self):
-        self._convert_to_raw()
-        raw_path = os.path.join(self._tmp, self._img + ".raw")
-        vdi_path = os.path.join(self._tmp, self._disk_img)
-        if subprocess.call(["vboxmanage", "convertfromraw", raw_path,
-                            vdi_path]) != 0:
-            raise BoxVBoxFailure(f'Cannot convert image {self._disk_img} '
-                                 f'to VDI.')
-        os.unlink(raw_path)
-
-    def _download_image(self):
-        if self._checksum():
-            print(f'Image already downloaded: {self._img}')
-            return
-
-        url = "https://cloud-images.ubuntu.com/releases/"
-        url += f"{self.ubuntu_version}/release/"
-        img = f"ubuntu-{self.ubuntu_version}-server-cloudimg-amd64.img"
-        url += img
-        print(f'Downloading image {self._img}')
-        subprocess.call(['wget', '-q', url, '-O',
-                         os.path.join(self.CACHE_DIR, self._img)])
-
-        if not self._checksum():
-            # TODO: make some retry mechanism?
-            raise BoxSysCommandError('Checksum for downloaded image differ '
-                                     'from expected.')
+    # than, let's try to see if boostraping process has finished
+    print('Waiting for cloud init to finish')
+    while True:
+        if vbox.vm_info['uuid'] in vbox.get_running_vms():
+            time.sleep(3)
         else:
-            print(f'Downloaded image {self._img}')
-
-    def _cleanup(self):
-        subprocess.call(['vboxmanage', 'closemedium', 'dvd',
-                         os.path.join(self._tmp, self.CLOUD_IMAGE)])
-        subprocess.call(['rm', '-fr', self._tmp])
-
-
-class VMDestroy:
-    def __init__(self, args):
-        self.vm_name_or_uuid = args.name
-
-    def run(self):
-        subprocess.call(['vboxmanage', 'controlvm', self.vm_name_or_uuid,
-                         'poweroff'], stderr=subprocess.DEVNULL)
-        if subprocess.call(['vboxmanage', 'unregistervm', self.vm_name_or_uuid,
-                            '--delete']) != 0:
-            raise BoxVBoxFailure(f'Removing VM {self.vm_name_or_uuid} failed')
+            print('Done')
+            break
+    # dettach ISO image
+    vbox.storageattach('IDE', 1, 'dvddrive', 'none')
+    iso.cleanup()
+    image.cleanup()
+    vbox.poweron()
+    print('You can access your VM by issuing:')
+    print(f'ssh -p 2222 -i {iso.ssh_key_path[:-4]} ubuntu@localhost')
 
 
-
-class VMList:
-    def __init__(self, args):
-        self.running = args.running
-        self.long = args.long
-
-    def run(self):
-        subcommand = 'runningvms' if self.running else 'vms'
-        long_list = '-l' if self.long else '-s'
+def vmdestroy(args):
+    VBoxManage(args.name).destroy()
 
 
-class VMRebuild:
-    def __init__(self, args):
-        self.vbox = VBoxManage(args.name)
+def vmlist(args):
+    VBoxManage().vmlist(args.running, args.long)
 
-        self.memory = args.memory
-        self.cpus = args.cpus
-        self.key = args.key
-        self.size = args.size
-        self.ubuntu_version = args.version
-        self.version = args.version
 
-    def run(self):
-        # get the vm infos
-        self.vbox.poweroff(silent=True)
+def vmrebuild(args):
+    vbox = VBoxManage(args.name)
 
-        disk_path = self.vbox.get_disk_path()
+    vbox.poweroff(silent=True)
 
-        if not disk_path:
-            # no disks, return
-            return
+    disk_path = vbox.get_disk_path()
 
-        vm_info = self.vbox.get_vm_info()
+    if not disk_path:
+        # no disks, return
+        return 1
 
-        cpus = self.cpus or vm_info['cpus']
-        memory = self.memory or vm_info['memory']
+    vm_info = vbox.get_vm_info()
 
-        if not self.size:
-            disk_size = self.vbox.get_media_size(disk_path)
-        else:
-            disk_size = self.size
+    args.cpus = args.cpus or vm_info['cpus']
+    args.memory = args.memory or vm_info['memory']
 
-        args = argparse.Namespace()
-        args.disk_size = disk_size
-        args.memory = memory
-        args.cpus = cpus
-        args.key = self.key
-        args.version = self.ubuntu_version
-        VMDestroy(args).run()
-        VMCreate(args).run()
+    if not args.disk_size:
+        args.disk_size = vbox.get_media_size(disk_path)
+
+    vmdestroy(args)
+    vmcreate(args)
 
 
 def main():
@@ -650,7 +445,7 @@ def main():
     create = subparsers.add_parser('create', help='create and configure VM, '
                                    'create corresponding assets, config '
                                    'drive and run')
-    create.set_defaults(func=VMCreate)
+    create.set_defaults(func=vmcreate)
     create.add_argument('name', help='name of the VM')
     create.add_argument('-c', '--cpus', default=6, type=int,
                         help="amount of CPUs to be configured. Default 6.")
@@ -670,7 +465,7 @@ def main():
 
     destroy = subparsers.add_parser('destroy', help='destroy VM')
     destroy.add_argument('name', help='name or UUID of the VM')
-    destroy.set_defaults(func=VMDestroy)
+    destroy.set_defaults(func=vmdestroy)
 
     list_vms = subparsers.add_parser('list', help='list VMs')
     list_vms.add_argument('-l', '--long', action='store_true',
@@ -678,7 +473,7 @@ def main():
                           'about VMs')
     list_vms.add_argument('-r', '--running', action='store_true',
                           help='show only running VMs')
-    list_vms.set_defaults(func=VMList)
+    list_vms.set_defaults(func=vmlist)
 
     rebuild = subparsers.add_parser('rebuild', help='Rebuild VM')
     rebuild.add_argument('name', help='name or UUID of the VM')
@@ -700,13 +495,13 @@ def main():
     rebuild.add_argument('-v', '--version', default=UBUNTU_VERSION,
                          help=f"Ubuntu server version. Default "
                          f"{UBUNTU_VERSION}")
-    rebuild.set_defaults(func=VMRebuild)
+    rebuild.set_defaults(func=vmrebuild)
 
 
     args = parser.parse_args()
 
     try:
-        return args.func(args).run()
+        return args.func(args)
     except AttributeError:
         parser.print_help()
         parser.exit()
