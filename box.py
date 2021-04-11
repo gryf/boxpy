@@ -201,8 +201,10 @@ class VBoxManage:
             raise BoxVBoxFailure('Cannot convert image to VDI.')
         os.unlink(src)
 
-    def closemedium(self, mediumpath):
-        subprocess.call(['vboxmanage', 'closemedium', 'dvd', mediumpath])
+    def closemedium(self, type_, mediumpath):
+        if subprocess.call(['vboxmanage', 'closemedium', type_,
+                            mediumpath]) != 0:
+            raise BoxVBoxFailure(f'Failed close medium {mediumpath}.')
 
     def create_controller(self, name, type_):
         if subprocess.call(['vboxmanage', 'storagectl', self.name_or_uuid,
@@ -398,6 +400,7 @@ def vmcreate(args):
             break
     # dettach ISO image
     vbox.storageattach('IDE', 1, 'dvddrive', 'none')
+    vbox.closemedium('dvd', path_to_iso)
     iso.cleanup()
     image.cleanup()
     vbox.poweron()
