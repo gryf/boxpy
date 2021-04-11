@@ -16,7 +16,7 @@ META_DATA_TPL = string.Template('''\
 instance-id: $instance_id
 local-hostname: $vmhostname
 ''')
-
+UBUNTU_VERSION = '20.04'
 USER_DATA_TPL = string.Template('''\
 #cloud-config
 users:
@@ -519,7 +519,46 @@ class VMList:
         subcommand = 'runningvms' if self.running else 'vms'
         long_list = '-l' if self.long else '-s'
 
-        subprocess.call(['vboxmanage', 'list', subcommand, long_list])
+
+class VMRebuild:
+    def __init__(self, args):
+        self.vbox = VBoxManage(args.name)
+
+        self.memory = args.memory
+        self.cpus = args.cpus
+        self.key = args.key
+        self.size = args.size
+        self.ubuntu_version = args.version
+        self.version = args.version
+
+    def run(self):
+        # get the vm infos
+        self.vbox.poweroff(silent=True)
+
+        disk_path = self.vbox.get_disk_path()
+
+        if not disk_path:
+            # no disks, return
+            return
+
+        vm_info = self.vbox.get_vm_info()
+
+        cpus = self.cpus or vm_info['cpus']
+        memory = self.memory or vm_info['memory']
+
+        if not self.size:
+            disk_size = self.vbox.get_media_size(disk_path)
+        else:
+            disk_size = self.size
+
+        args = argparse.Namespace()
+        args.disk_size = disk_size
+        args.memory = memory
+        args.cpus = cpus
+        args.key = self.key
+        args.version = self.ubuntu_version
+        VMDestroy(args).run()
+        VMCreate(args).run()
 
 
 def main():
@@ -533,20 +572,21 @@ def main():
                                    'drive and run')
     create.set_defaults(func=VMCreate)
     create.add_argument('name', help='name of the VM')
-    create.add_argument('-m', '--memory', default=12288, type=int,
-                        help="amount of memory in Megabytes, default 12GB")
     create.add_argument('-c', '--cpus', default=6, type=int,
                         help="amount of CPUs to be configured. Default 6.")
     create.add_argument('-d', '--disk-size', default=32768, type=int,
                         help="disk size to be expanded to. By default to 32GB")
-    create.add_argument('-v', '--version', default="18.04",
-                        help="Ubuntu server version. Default 18.04")
-    create.add_argument('-n', '--hostname', default="ubuntu",
-                        help="VM hostname. Default ubuntu")
     create.add_argument('-k', '--key',
                         default=os.path.expanduser("~/.ssh/id_rsa"),
                         help="SSH key to be add to the config drive. Default "
                         "~/.ssh/id_rsa")
+    create.add_argument('-m', '--memory', default=12288, type=int,
+                        help="amount of memory in Megabytes, default 12GB")
+    create.add_argument('-n', '--hostname', default="ubuntu",
+                        help="VM hostname. Default ubuntu")
+    create.add_argument('-v', '--version', default=UBUNTU_VERSION,
+                        help=f"Ubuntu server version. Default "
+                        f"{UBUNTU_VERSION}")
 
     destroy = subparsers.add_parser('destroy', help='destroy VM')
     destroy.add_argument('name', help='name or UUID of the VM')
@@ -559,6 +599,29 @@ def main():
     list_vms.add_argument('-r', '--running', action='store_true',
                           help='show only running VMs')
     list_vms.set_defaults(func=VMList)
+
+    rebuild = subparsers.add_parser('rebuild', help='Rebuild VM')
+    rebuild.add_argument('name', help='name or UUID of the VM')
+    rebuild.add_argument('-c', '--cpus', type=int,
+                         help="amount of CPUs to be configured. If not "
+                         "provided, it will be the same as in rebuilding VM.")
+    rebuild.add_argument('-d', '--disk-size',
+                         help="disk size to be expanded to. If not provided, "
+                         "it will be the same as the existing image.")
+    rebuild.add_argument('-k', '--key',
+                         default=os.path.expanduser("~/.ssh/id_rsa"),
+                         help="SSH key to be add to the config drive. Default "
+                         "~/.ssh/id_rsa")
+    rebuild.add_argument('-m', '--memory', type=int,
+                         help="amount of memory in Megabytes, if not provided "
+                         "it will be taken form rebuilding machine.")
+    rebuild.add_argument('-n', '--hostname', default="ubuntu",
+                         help="VM hostname. Default ubuntu")
+    rebuild.add_argument('-v', '--version', default=UBUNTU_VERSION,
+                         help=f"Ubuntu server version. Default "
+                         f"{UBUNTU_VERSION}")
+    rebuild.set_defaults(func=VMRebuild)
+
 
     args = parser.parse_args()
 
