@@ -2,13 +2,14 @@
 
 import argparse
 import os
-import subprocess
-import tempfile
 import shutil
 import string
+import subprocess
 import sys
-import uuid
+import tempfile
 import time
+import uuid
+import xml
 
 
 META_DATA_TPL = string.Template('''\
@@ -52,6 +53,191 @@ class BoxConvertionError(BoxError):
 
 class BoxSysCommandError(BoxError):
     pass
+
+
+class VBoxManage:
+    """
+    Class for dealing with vboxmanage commands
+    """
+    def __init__(self, name_or_uuid=None):
+        self.name_or_uuid = name_or_uuid
+        self.vm_info = {}
+
+    def get_vm_base_path(self):
+        path = self._get_vm_config()
+        if not path:
+            return
+
+        return os.path.dirname(path)
+
+    def get_disk_path(self):
+        path = self._get_vm_config()
+        if not path:
+            return
+
+        dom = xml.dom.minidom.parse(path)
+        if len(dom.getElementsByTagName('HardDisk')) != 1:
+            # don't know what to do with multiple discs
+            raise BoxError('Cannot deal with multiple attached disks, perhaps '
+                           'you need to do this manually')
+        disk = dom.getElementsByTagName('HardDisk')[0]
+        location = disk.getAttribute('location')
+        if location.startswith('/'):
+            disk_path = location
+        else:
+            disk_path = os.path.join(self.get_vm_base_path(), location)
+
+        return disk_path
+
+    def get_media_size(self, media_path):
+        try:
+            out = subprocess.check_output(['vboxmanage', 'showmediuminfo',
+                                           media_path],
+                                          encoding=sys.getdefaultencoding(),
+                                          stderr=subprocess.DEVNULL)
+        except subprocess.CalledProcessError:
+            return None
+
+        for line in out.split('\n'):
+            if line.startswith('Capacity:'):
+                line = line.split('Capacity:')[1].strip()
+
+                if line.isnumeric():
+                    return line
+                else:
+                    return line.split(' ')[0].strip()
+
+    def get_vm_info(self):
+        try:
+            out = subprocess.check_output(['vboxmanage', 'showvminfo',
+                                           self.name_or_uuid],
+                                          encoding=sys.getdefaultencoding(),
+                                          stderr=subprocess.DEVNULL)
+        except subprocess.CalledProcessError:
+            return None
+
+        self.vm_info = {}
+
+        for line in out.split('\n'):
+            if line.startswith('Config file:'):
+                self.vm_info['config_file'] = line.split('Config '
+                                                         'file:')[1].strip()
+                continue
+
+            if line.startswith('Memory size'):
+                mem = line.split('Memory size')[1].strip()
+                if mem.isnumeric():
+                    self.vm_info['memory'] = mem
+                else:
+                    # 12288MB
+                    self.vm_info['memory'] = mem[:-2]
+                continue
+
+            if line.startswith('Number of CPUs:'):
+                self.vm_info['cpus'] = line.split('Number of CPUs:')[1].strip()
+                continue
+
+            if line.startswith('UUID:'):
+                self.vm_info['uuid'] = line.split('UUID:')[1].strip()
+
+        return self.vm_info
+
+    def poweroff(self, silent=False):
+        cmd = ['vboxmanage', 'controlvm', self.name_or_uuid, 'poweroff']
+        if silent:
+            subprocess.call(cmd, stderr=subprocess.DEVNULL)
+        else:
+            subprocess.call(cmd)
+
+    def vmlist(self, only_running=False, long_list=False):
+        subcommand = 'runningvms' if only_running else 'vms'
+        long_list = '-l' if long_list else '-s'
+        subprocess.call(['vboxmanage', 'list', subcommand, long_list])
+
+    def get_running_vms(self):
+        return subprocess.getoutput('vboxmanage list runningvms')
+
+    def destroy(self):
+        self.poweroff(silent=True)
+        if subprocess.call(['vboxmanage', 'unregistervm', self.name_or_uuid,
+                            '--delete']) != 0:
+            raise BoxVBoxFailure(f'Removing VM {self.name_or_uuid} failed')
+
+    def create(self, cpus, memory):
+        self.uuid = None
+
+        try:
+            out = subprocess.check_output(['vboxmanage', 'createvm', '--name',
+                                           self.name_or_uuid, '--register'],
+                                          encoding=sys.getdefaultencoding())
+        except subprocess.CalledProcessError:
+            return None
+
+        for line in out.split('\n'):
+            print(line)
+            if line.startswith('UUID:'):
+                self.uuid = line.split('UUID:')[1].strip()
+
+        if not self.uuid:
+            raise BoxVBoxFailure(f'Cannot create VM "{self.name_or_uuid}".')
+
+        if subprocess.call(['vboxmanage', 'modifyvm', self.name_or_uuid,
+                            '--memory', str(memory),
+                            '--cpus', str(cpus),
+                            '--boot1', 'disk',
+                            '--acpi', 'on',
+                            '--audio', 'none',
+                            '--nic1', 'nat',
+                            '--natpf1', 'guestssh,tcp,,2222,,22']) != 0:
+            raise BoxVBoxFailure(f'Cannot modify VM "{self.name_or_uuid}".')
+
+        return self.uuid
+
+    def convertfromraw(self, src, dst):
+        if subprocess.call(["vboxmanage", "convertfromraw", src, dst]) != 0:
+            os.unlink(src)
+            raise BoxVBoxFailure('Cannot convert image to VDI.')
+        os.unlink(src)
+
+    def closemedium(self, mediumpath):
+        subprocess.call(['vboxmanage', 'closemedium', 'dvd', mediumpath])
+
+    def create_controller(self, name, type_):
+        if subprocess.call(['vboxmanage', 'storagectl', self.name_or_uuid,
+                            '--name', name, '--add', type_]) != 0:
+            raise BoxVBoxFailure(f'Adding controller {type_} has failed.')
+
+    def move_and_resize_image(self, src, dst, size):
+        fullpath = os.path.join(self.get_vm_base_path(), dst)
+
+        if subprocess.call(['vboxmanage', 'modifymedium', 'disk', src,
+                            '--resize', str(size), '--move', fullpath]) != 0:
+            raise BoxVBoxFailure(f'Resizing and moving image {dst} has '
+                                 f'failed')
+        return fullpath
+
+    def storageattach(self, controller_name, port, type_, image):
+        if subprocess.call(['vboxmanage', 'storageattach', self.name_or_uuid,
+                            '--storagectl', controller_name,
+                            '--port', str(port),
+                            '--device', '0',
+                            '--type', type_,
+                            '--medium', image]) != 0:
+            raise BoxVBoxFailure(f'Attaching {image} to VM has failed.')
+
+    def poweron(self):
+        if subprocess.call(['vboxmanage', 'startvm', self.name_or_uuid,
+                            '--type', 'headless']) != 0:
+            raise BoxVBoxFailure(f'Failed to start: {self.name_or_uuid}.')
+
+    def _get_vm_config(self):
+        if self.vm_info.get('config_file'):
+            return self.vm_info['config_file']
+
+        self.get_vm_info()
+
+        if self.vm_info.get('config_file'):
+            return self.vm_info['config_file']
 
 
 class VMCreate:
