@@ -240,6 +240,86 @@ class VBoxManage:
             return self.vm_info['config_file']
 
 
+class Image:
+    def __init__(self, vbox, version, arch='amd64'):
+        self.version = version
+        self.arch = arch
+        self.vbox = vbox
+        self._tmp = tempfile.mkdtemp()
+        self._img = f"ubuntu-{self.version}-server-cloudimg-{self.arch}.img"
+
+    def convert_to_vdi(self, disk_img, size):
+        self._download_image()
+        self._convert_to_raw()
+        raw_path = os.path.join(self._tmp, self._img + ".raw")
+        vdi_path = os.path.join(self._tmp, disk_img)
+        self.vbox.convertfromraw(raw_path, vdi_path)
+        return self.vbox.move_and_resize_image(vdi_path, disk_img, size)
+
+    def _checksum(self):
+        """
+        Get and check checkusm for downloaded image. Return True if the
+        checksum is correct, False otherwise.
+        """
+        if not os.path.exists(os.path.join(CACHE_DIR, self._img)):
+            return False
+
+        expected_sum = None
+        fname = 'SHA256SUMS'
+        url = "https://cloud-images.ubuntu.com/releases/"
+        url += f"{self.version}/release/{fname}"
+        # TODO: make the verbosity switch be dependent from verbosity of the
+        # script.
+        subprocess.call(['wget', url, '-q', '-O',
+                         os.path.join(self._tmp, fname)])
+
+        with open(os.path.join(self._tmp, fname)) as fobj:
+            for line in fobj.readlines():
+                if self._img in line:
+                    expected_sum = line.split(' ')[0]
+                    break
+
+        if not expected_sum:
+            raise BoxError('Cannot find provided cloud image')
+
+        if os.path.exists(os.path.join(CACHE_DIR, self._img)):
+            cmd = 'sha256sum ' + os.path.join(CACHE_DIR, self._img)
+            calulated_sum = subprocess.getoutput(cmd).split(' ')[0]
+            return calulated_sum == expected_sum
+
+        return False
+
+    def cleanup(self):
+        subprocess.call(['rm', '-fr', self._tmp])
+
+    def _convert_to_raw(self):
+        img_path = os.path.join(CACHE_DIR, self._img)
+        raw_path = os.path.join(self._tmp, self._img + ".raw")
+        if subprocess.call(['qemu-img', 'convert', '-O', 'raw',
+                            img_path, raw_path]) != 0:
+            raise BoxConvertionError(f'Cannot convert image {self._img} to '
+                                     'RAW.')
+
+    def _download_image(self):
+        if self._checksum():
+            print(f'Image already downloaded: {self._img}')
+            return
+
+        url = "https://cloud-images.ubuntu.com/releases/"
+        url += f"{self.version}/release/"
+        url += self._img
+        print(f'Downloading image {self._img}')
+        subprocess.call(['wget', '-q', url, '-O', os.path.join(CACHE_DIR,
+                                                               self._img)])
+
+        if not self._checksum():
+            # TODO: make some retry mechanism?
+            raise BoxSysCommandError('Checksum for downloaded image differ '
+                                     'from expected.')
+        else:
+            print(f'Downloaded image {self._img}')
+
+
 class VMCreate:
     """
     Create vbox VM of Ubuntu server from cloud image with the following steps:
