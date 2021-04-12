@@ -554,7 +554,8 @@ def vmcreate(args):
     vbox.setextradata('key', args.key)
     vbox.setextradata('hostname', args.hostname)
     vbox.setextradata('version', args.version)
-    vbox.setextradata('user_data_path', args.user_data_path)
+    if args.user_data_path:
+        vbox.setextradata('user_data_path', args.user_data_path)
 
     image = Image(vbox, args.version)
     path_to_disk = image.convert_to_vdi(args.name + '.vdi', args.disk_size)
@@ -611,7 +612,7 @@ def vmrebuild(args):
     args.hostname = args.hostname or vm_info['hostname']
     args.key = args.key or vm_info['key']
     args.memory = args.memory or vm_info['memory']
-    args.user_data_path = args.user_data_path or vm_info['user_data_path']
+    args.user_data_path = args.user_data_path or vm_info.get('user_data_path')
     args.version = args.version or vm_info['version']
 
     if not args.disk_size:
