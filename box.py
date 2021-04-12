@@ -35,7 +35,138 @@ power_state:
   timeout: 10
   condition: True
 ''')
+COMPLETIONS = {'bash': '''\
+_boxpy() {
+    local cur prev words cword
 
+    # Complete registered VM names.
+    # Issues are the same as in above function.
+    _vms_comp() {
+        local command=$1
+        local exclude_running=false
+        local vms
+        local running_vms
+        local item
+
+        compopt -o filenames
+        if [[ $# == 2 ]]
+        then
+            exclude_running=true
+            running_vms=$(VBoxManage list runningvms | \
+                awk -F ' {' '{ print $1 }' | \
+                tr '\n' '|' | \
+                $VBMC_SED 's/|$//' | \
+                $VBMC_SED 's/"//g')
+            IFS='|' read -ra running_vms <<< "$running_vms"
+        fi
+
+        vms=$(VBoxManage list $command | \
+            awk -F ' {' '{ print $1 }' | \
+            tr '\n' '|' | \
+            $VBMC_SED 's/|$//' | \
+            $VBMC_SED 's/"//g')
+        IFS='|' read -ra vms <<< "$vms"
+        for item in "${vms[@]}"
+        do
+            if $exclude_running
+            then
+                _is_in_array "$item" "${running_vms[@]}"
+                [[ $? == 0 ]] && continue
+            fi
+
+            [[ ${item^^} == ${cur^^}* ]] && COMPREPLY+=("$item")
+        done
+    }
+
+    _get_excluded_items() {
+        local i
+
+        result=""
+        for i in $@; do
+            [[ " ${COMP_WORDS[@]} " == *" $i "* ]] && continue
+            result="$result $i"
+        done
+    }
+
+    _ssh_identityfile() {
+        [[ -z $cur && -d ~/.ssh ]] && cur=~/.ssh/id
+        _filedir
+        if ((${#COMPREPLY[@]} > 0)); then
+            COMPREPLY=($(compgen -W '${COMPREPLY[@]}' \
+                -X "${1:+!}*.pub" -- "$cur"))
+        fi
+    }
+
+    COMP_WORDBREAKS=${COMP_WORDBREAKS//|/}  # remove pipe from comp word breaks
+    COMPREPLY=()
+
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    if [[ COMP_CWORD -ge 2 ]]; then
+        cmd="${COMP_WORDS[1]}"
+        if [[ $cmd == "-q" ]]; then
+                cmd="${COMP_WORDS[2]}"
+        fi
+    fi
+
+    opts="create destroy rebuild list completion"
+    if [[ ${cur} == "-q" || ${cur} == "-v" || ${COMP_CWORD} -eq 1 ]] ; then
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+        return 0
+    fi
+
+    case "${cmd}" in
+        completion)
+            if [[ ${prev} == ${cmd} ]]; then
+                COMPREPLY=( $(compgen -W "bash" -- ${cur}) )
+            fi
+            ;;
+        create|rebuild)
+            items=(--cpus --disk-size --key --memory --hostname
+                --user-data-path --version)
+            if [[ ${prev} == ${cmd} ]]; then
+                if [[ ${cmd} = "rebuild" ]]; then
+                    _vms_comp vms
+                else
+                    COMPREPLY=( $(compgen -W "${items[*]}" -- ${cur}) )
+                fi
+            else
+                _get_excluded_items "${items[@]}"
+                COMPREPLY=( $(compgen -W "$result" -- ${cur}) )
+
+                case "${prev}" in
+                    --user-data-path)
+                        COMPREPLY=( $(compgen -f -- ${cur}) )
+                        ;;
+                    --key)
+                        _ssh_identityfile
+                        ;;
+                    --basefolder)
+                        COMPREPLY=( $(compgen -o dirnames -- ${cur}) )
+                        ;;
+                    --variant)
+                        COMPREPLY=( $(compgen -W "Standard Fixed Split2G Stream
+                        ESX" -- ${cur}) )
+                        ;;
+                esac
+            fi
+
+            ;;
+        destroy)
+            if [[ ${prev} == ${cmd} ]]; then
+                    _vms_comp vms
+            fi
+            ;;
+        list)
+            items=(--long --running)
+            _get_excluded_items "${items[@]}"
+            COMPREPLY=( $(compgen -W "$result" -- ${cur}) )
+            ;;
+    esac
+
+}
+complete -o default -F _boxpy boxpy
+'''}
 
 def convert_to_mega(size):
     """
@@ -490,6 +621,10 @@ def vmrebuild(args):
     vmcreate(args)
 
 
+def shell_completion(args):
+    sys.stdout.write(COMPLETIONS[args.shell])
+
+
 def main():
     parser = argparse.ArgumentParser(description="Automate deployment and "
                                      "maintenance of Ubuntu VMs using "
@@ -549,6 +684,11 @@ def main():
     rebuild.add_argument('-v', '--version', help='Ubuntu server version')
     rebuild.set_defaults(func=vmrebuild)
 
+    completion = subparsers.add_parser('completion', help='generate shell '
+                                       'completion')
+    completion.add_argument('shell', choices=['bash'],
+                            help="pick shell to generate completions for")
+    completion.set_defaults(func=shell_completion)
 
     args = parser.parse_args()
 
