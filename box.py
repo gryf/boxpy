@@ -362,9 +362,8 @@ class Image:
 
 
 class IsoImage:
-    def __init__(self, hostname, ssh_key, vbox=None):
+    def __init__(self, hostname, ssh_key, user_data=None):
         self._tmp = tempfile.mkdtemp()
-        self.vbox = vbox
         self.hostname = hostname
         self.ssh_key_path = ssh_key
 
@@ -376,6 +375,11 @@ class IsoImage:
         if not os.path.exists(self.ssh_key_path):
             raise BoxNotFound(f'Cannot find default ssh public key: '
                               f'{self.ssh_key_path}')
+
+        self.ud_tpl = None
+        if user_data and os.path.exists(user_data):
+            with open(user_data) as fobj:
+                self.ud_tpl = string.Template(fobj.read())
 
     def get_generated_image(self):
         self._create_cloud_image()
@@ -396,7 +400,8 @@ class IsoImage:
             ssh_pub_key = fobj.read().strip()
 
         with open(os.path.join(self._tmp, 'user-data'), 'w') as fobj:
-            fobj.write(USER_DATA_TPL.substitute({'ssh_key': ssh_pub_key}))
+            template = self.ud_tpl or USER_DATA_TPL
+            fobj.write(template.substitute({'ssh_key': ssh_pub_key}))
 
         mkiso = 'mkisofs' if shutil.which('mkisofs') else 'genisoimage'
 
@@ -418,11 +423,12 @@ def vmcreate(args):
     vbox.setextradata('key', args.key)
     vbox.setextradata('hostname', args.hostname)
     vbox.setextradata('version', args.version)
+    vbox.setextradata('user_data_path', args.user_data_path)
 
     image = Image(vbox, args.version)
     path_to_disk = image.convert_to_vdi(args.name + '.vdi', args.disk_size)
 
-    iso = IsoImage(args.hostname, args.key)
+    iso = IsoImage(args.hostname, args.key, args.user_data_path)
     path_to_iso = iso.get_generated_image()
     vbox.storageattach('SATA', 0, 'hdd', path_to_disk)
     vbox.storageattach('IDE', 1, 'dvddrive', path_to_iso)
@@ -471,9 +477,10 @@ def vmrebuild(args):
     vm_info = vbox.get_vm_info()
 
     args.cpus = args.cpus or vm_info['cpus']
-    args.memory = args.memory or vm_info['memory']
-    args.key = args.key or vm_info['key']
     args.hostname = args.hostname or vm_info['hostname']
+    args.key = args.key or vm_info['key']
+    args.memory = args.memory or vm_info['memory']
+    args.user_data_path = args.user_data_path or vm_info['user_data_path']
     args.version = args.version or vm_info['version']
 
     if not args.disk_size:
@@ -506,6 +513,8 @@ def main():
                         help="amount of memory in Megabytes, default 12GB")
     create.add_argument('-n', '--hostname', default="ubuntu",
                         help="VM hostname. Default ubuntu")
+    create.add_argument('-u', '--user-data-path',
+                        help="Alternative user-data template filepath")
     create.add_argument('-v', '--version', default=UBUNTU_VERSION,
                         help=f"Ubuntu server version. Default "
                         f"{UBUNTU_VERSION}")
@@ -535,6 +544,8 @@ def main():
     rebuild.add_argument('-m', '--memory', help='amount of memory in '
                          'Megabytes')
     rebuild.add_argument('-n', '--hostname', help="set VM hostname")
+    rebuild.add_argument('-u', '--user-data-path',
+                         help="Alternative user-data template filepath")
     rebuild.add_argument('-v', '--version', help='Ubuntu server version')
     rebuild.set_defaults(func=vmrebuild)
 
