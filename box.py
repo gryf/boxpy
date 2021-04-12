@@ -637,16 +637,16 @@ def main():
                                    'drive and run')
     create.set_defaults(func=vmcreate)
     create.add_argument('name', help='name of the VM')
-    create.add_argument('-c', '--cpus', default=6, type=int,
-                        help="amount of CPUs to be configured. Default 6.")
-    create.add_argument('-d', '--disk-size', default=32768,
-                        help="disk size to be expanded to. By default to 32GB")
+    create.add_argument('-c', '--cpus', default=1, type=int,
+                        help="amount of CPUs to be configured. Default 1.")
+    create.add_argument('-d', '--disk-size', default='10240',
+                        help="disk size to be expanded to. By default to 10GB")
     create.add_argument('-k', '--key',
                         default=os.path.expanduser("~/.ssh/id_rsa"),
                         help="SSH key to be add to the config drive. Default "
                         "~/.ssh/id_rsa")
-    create.add_argument('-m', '--memory', default=12288,
-                        help="amount of memory in Megabytes, default 12GB")
+    create.add_argument('-m', '--memory', default='2048',
+                        help="amount of memory in Megabytes, default 2GB")
     create.add_argument('-n', '--hostname', default="ubuntu",
                         help="VM hostname. Default ubuntu")
     create.add_argument('-u', '--user-data-path',
@@ -693,11 +693,11 @@ def main():
 
     args = parser.parse_args()
 
-    try:
+    if hasattr(args, 'func'):
         return args.func(args)
-    except AttributeError:
-        parser.print_help()
-        parser.exit()
+
+    parser.print_help()
+    parser.exit()
 
 
 if __name__ == '__main__':
