@@ -9,7 +9,7 @@ import sys
 import tempfile
 import time
 import uuid
-import xml
+import xml.dom.minidom
 
 
 CACHE_DIR = os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
@@ -35,6 +35,29 @@ power_state:
   timeout: 10
   condition: True
 ''')
+
+
+def convert_to_mega(size):
+    """
+    Vritualbox uses MB as a common denominator for amount of memory or disk
+    size. This function will return string of MB from string which have human
+    readable suffix, like M or G. Case insensitive.
+    """
+
+    if size.isnumeric():
+        return str(size)
+
+    if size.lower().endswith('m') and size[:-1].isnumeric():
+        return str(size[:-1])
+
+    if size.lower().endswith('g') and size[:-1].isnumeric():
+        return str(int(size[:-1]) * 1024)
+
+    if size.lower().endswith('mb') and size[:-2].isnumeric():
+        return str(size[:-2])
+
+    if size.lower().endswith('gb') and size[:-2].isnumeric():
+        return str(int(size[:-2]) * 1024)
 
 
 class BoxError(Exception):
@@ -167,6 +190,7 @@ class VBoxManage:
 
     def create(self, cpus, memory):
         self.uuid = None
+        memory = convert_to_mega(memory)
 
         try:
             out = subprocess.check_output(['vboxmanage', 'createvm', '--name',
@@ -213,6 +237,7 @@ class VBoxManage:
 
     def move_and_resize_image(self, src, dst, size):
         fullpath = os.path.join(self.get_vm_base_path(), dst)
+        size = convert_to_mega(size)
 
         if subprocess.call(['vboxmanage', 'modifymedium', 'disk', src,
                             '--resize', str(size), '--move', fullpath]) != 0:
