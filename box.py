@@ -570,12 +570,14 @@ def vmcreate(args):
     time.sleep(3)
 
     # than, let's try to see if boostraping process has finished
-    print('Waiting for cloud init to finish')
+    print('Waiting for cloud init to finish ', end='')
     while True:
         if vbox.vm_info['uuid'] in vbox.get_running_vms():
+            print('.', end='')
+            sys.stdout.flush()
             time.sleep(3)
         else:
-            print('Done')
+            print(' done.')
             break
     # dettach ISO image
     vbox.storageattach('IDE', 1, 'dvddrive', 'none')
@@ -630,6 +632,7 @@ def main():
     parser = argparse.ArgumentParser(description="Automate deployment and "
                                      "maintenance of Ubuntu VMs using "
                                      "VirtualBox and Ubuntu cloud images")
+
     subparsers = parser.add_subparsers(help='supported commands')
 
     create = subparsers.add_parser('create', help='create and configure VM, '
