@@ -37,7 +37,8 @@ power_state:
 ''')
 COMPLETIONS = {'bash': '''\
 _boxpy() {
-    local cur prev words cword
+    local cur prev words cword _GNUSED
+    _GNUSED=${GNUSED:-sed}
 
     # Complete registered VM names.
     # Issues are the same as in above function.
@@ -55,16 +56,16 @@ _boxpy() {
             running_vms=$(VBoxManage list runningvms | \
                 awk -F ' {' '{ print $1 }' | \
                 tr '\n' '|' | \
-                $VBMC_SED 's/|$//' | \
-                $VBMC_SED 's/"//g')
+                $_GNUSED 's/|$//' | \
+                $_GNUSED 's/"//g')
             IFS='|' read -ra running_vms <<< "$running_vms"
         fi
 
         vms=$(VBoxManage list $command | \
             awk -F ' {' '{ print $1 }' | \
             tr '\n' '|' | \
-            $VBMC_SED 's/|$//' | \
-            $VBMC_SED 's/"//g')
+            $_GNUSED 's/|$//' | \
+            $_GNUSED 's/"//g')
         IFS='|' read -ra vms <<< "$vms"
         for item in "${vms[@]}"
         do
@@ -154,7 +155,7 @@ _boxpy() {
             ;;
         destroy)
             if [[ ${prev} == ${cmd} ]]; then
-                    _vms_comp vms
+                _vms_comp vms
             fi
             ;;
         list)
