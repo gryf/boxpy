@@ -550,8 +550,16 @@ def vmcreate(args):
     vbox.create_controller('IDE', 'ide')
     vbox.create_controller('SATA', 'sata')
 
+    def normalize_name(name):
+        name = name.replace(' ', '-')
+        name = name.encode('ascii', errors='ignore')
+        name = name.decode('utf-8')
+        return ''.join(x for x in name if x.isalnum() or x == '-')
+
+    hostname = args.hostname or normalize_name(args.name)
+
     vbox.setextradata('key', args.key)
-    vbox.setextradata('hostname', args.hostname)
+    vbox.setextradata('hostname', hostname)
     vbox.setextradata('version', args.version)
     if args.user_data_path:
         vbox.setextradata('user_data_path', args.user_data_path)
@@ -559,7 +567,7 @@ def vmcreate(args):
     image = Image(vbox, args.version)
     path_to_disk = image.convert_to_vdi(args.name + '.vdi', args.disk_size)
 
-    iso = IsoImage(args.hostname, args.key, args.user_data_path)
+    iso = IsoImage(hostname, args.key, args.user_data_path)
     path_to_iso = iso.get_generated_image()
     vbox.storageattach('SATA', 0, 'hdd', path_to_disk)
     vbox.storageattach('IDE', 1, 'dvddrive', path_to_iso)
@@ -655,8 +663,8 @@ def main():
                         "~/.ssh/id_rsa")
     create.add_argument('-m', '--memory', default='2048',
                         help="amount of memory in Megabytes, default 2GB")
-    create.add_argument('-n', '--hostname', default="ubuntu",
-                        help="VM hostname. Default ubuntu")
+    create.add_argument('-n', '--hostname',
+                        help="VM hostname. Default same as vm name")
     create.add_argument('-p', '--port', default='2222',
                         help="set ssh port for VM, default 2222")
     create.add_argument('-u', '--user-data-path',
