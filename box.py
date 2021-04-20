@@ -142,13 +142,6 @@ _boxpy() {
                     --key)
                         _ssh_identityfile
                         ;;
-                    --basefolder)
-                        COMPREPLY=( $(compgen -o dirnames -- ${cur}) )
-                        ;;
-                    --variant)
-                        COMPREPLY=( $(compgen -W "Standard Fixed Split2G Stream
-                        ESX" -- ${cur}) )
-                        ;;
                 esac
             fi
 
