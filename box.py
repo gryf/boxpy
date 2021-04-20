@@ -124,7 +124,7 @@ _boxpy() {
             ;;
         create|rebuild)
             items=(--cpus --disk-size --key --memory --hostname
-                --user-data-path --version)
+                --port --user-data-path --version)
             if [[ ${prev} == ${cmd} ]]; then
                 if [[ ${cmd} = "rebuild" ]]; then
                     _vms_comp vms
@@ -297,6 +297,10 @@ class VBoxManage:
             val = extradata.getAttribute('value')
             self.vm_info[key] = val
 
+        if len(dom.getElementsByTagName('Forwarding')):
+            fw = dom.getElementsByTagName('Forwarding')[0]
+            self.vm_info['port'] = fw.getAttribute('hostport')
+
         return self.vm_info
 
     def poweroff(self, silent=False):
@@ -320,7 +324,7 @@ class VBoxManage:
                             '--delete']) != 0:
             raise BoxVBoxFailure(f'Removing VM {self.name_or_uuid} failed')
 
-    def create(self, cpus, memory):
+    def create(self, cpus, memory, port):
         self.uuid = None
         memory = convert_to_mega(memory)
 
@@ -346,7 +350,7 @@ class VBoxManage:
                             '--acpi', 'on',
                             '--audio', 'none',
                             '--nic1', 'nat',
-                            '--natpf1', 'guestssh,tcp,,2222,,22']) != 0:
+                            '--natpf1', f'guestssh,tcp,,{port},,22']) != 0:
             raise BoxVBoxFailure(f'Cannot modify VM "{self.name_or_uuid}".')
 
         return self.uuid
@@ -541,7 +545,8 @@ class IsoImage:
 
 def vmcreate(args):
     vbox = VBoxManage(args.name)
-    vbox.create(args.cpus, args.memory)
+    if not vbox.create(args.cpus, args.memory, args.port):
+        return 10
     vbox.create_controller('IDE', 'ide')
     vbox.create_controller('SATA', 'sata')
 
@@ -580,15 +585,18 @@ def vmcreate(args):
     image.cleanup()
     vbox.poweron()
     print('You can access your VM by issuing:')
-    print(f'ssh -p 2222 -i {iso.ssh_key_path[:-4]} ubuntu@localhost')
+    print(f'ssh -p {args.port} -i {iso.ssh_key_path[:-4]} ubuntu@localhost')
+    return 0
 
 
 def vmdestroy(args):
     VBoxManage(args.name).destroy()
+    return 0
 
 
 def vmlist(args):
     VBoxManage().vmlist(args.running, args.long)
+    return 0
 
 
 def vmrebuild(args):
@@ -608,6 +616,7 @@ def vmrebuild(args):
     args.hostname = args.hostname or vm_info['hostname']
     args.key = args.key or vm_info['key']
     args.memory = args.memory or vm_info['memory']
+    args.port = args.port or vm_info.get('port')
     args.user_data_path = args.user_data_path or vm_info.get('user_data_path')
     args.version = args.version or vm_info['version']
 
@@ -616,10 +625,12 @@ def vmrebuild(args):
 
     vmdestroy(args)
     vmcreate(args)
+    return 0
 
 
 def shell_completion(args):
     sys.stdout.write(COMPLETIONS[args.shell])
+    return 0
 
 
 def main():
@@ -646,6 +657,8 @@ def main():
                         help="amount of memory in Megabytes, default 2GB")
     create.add_argument('-n', '--hostname', default="ubuntu",
                         help="VM hostname. Default ubuntu")
+    create.add_argument('-p', '--port', default='2222',
+                        help="set ssh port for VM, default 2222")
     create.add_argument('-u', '--user-data-path',
                         help="Alternative user-data template filepath")
     create.add_argument('-v', '--version', default=UBUNTU_VERSION,
@@ -677,6 +690,7 @@ def main():
     rebuild.add_argument('-m', '--memory', help='amount of memory in '
                          'Megabytes')
     rebuild.add_argument('-n', '--hostname', help="set VM hostname")
+    rebuild.add_argument('-p', '--port', help="set ssh port for VM")
     rebuild.add_argument('-u', '--user-data-path',
                          help="Alternative user-data template filepath")
     rebuild.add_argument('-v', '--version', help='Ubuntu server version')
@@ -698,4 +712,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
