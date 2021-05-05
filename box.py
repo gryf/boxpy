@@ -124,7 +124,7 @@ _boxpy() {
             ;;
         create|rebuild)
             items=(--cpus --disk-size --key --memory --hostname
-                --port --user-data-path --version)
+                --port --cloud-config --version)
             if [[ ${prev} == ${cmd} ]]; then
                 if [[ ${cmd} = "rebuild" ]]; then
                     _vms_comp vms
@@ -136,7 +136,7 @@ _boxpy() {
                 COMPREPLY=( $(compgen -W "$result" -- ${cur}) )
 
                 case "${prev}" in
-                    --user-data-path)
+                    --cloud-config)
                         COMPREPLY=( $(compgen -f -- ${cur}) )
                         ;;
                     --key)
@@ -561,13 +561,13 @@ def vmcreate(args):
     vbox.setextradata('key', args.key)
     vbox.setextradata('hostname', hostname)
     vbox.setextradata('version', args.version)
-    if args.user_data_path:
-        vbox.setextradata('user_data_path', args.user_data_path)
+    if args.cloud_config:
+        vbox.setextradata('cloud_config', args.cloud_config)
 
     image = Image(vbox, args.version)
     path_to_disk = image.convert_to_vdi(args.name + '.vdi', args.disk_size)
 
-    iso = IsoImage(hostname, args.key, args.user_data_path)
+    iso = IsoImage(hostname, args.key, args.cloud_config)
     path_to_iso = iso.get_generated_image()
     vbox.storageattach('SATA', 0, 'hdd', path_to_disk)
     vbox.storageattach('IDE', 1, 'dvddrive', path_to_iso)
@@ -631,7 +631,7 @@ def vmrebuild(args):
     args.key = args.key or vm_info['key']
     args.memory = args.memory or vm_info['memory']
     args.port = args.port or vm_info.get('port')
-    args.user_data_path = args.user_data_path or vm_info.get('user_data_path')
+    args.cloud_config = args.cloud_config or vm_info.get('cloud_config')
     args.version = args.version or vm_info['version']
 
     if not args.disk_size:
@@ -673,7 +673,7 @@ def main():
                         help="VM hostname. Default same as vm name")
     create.add_argument('-p', '--port', default='2222',
                         help="set ssh port for VM, default 2222")
-    create.add_argument('-u', '--user-data-path',
+    create.add_argument('-u', '--cloud-config',
                         help="Alternative user-data template filepath")
     create.add_argument('-v', '--version', default=UBUNTU_VERSION,
                         help=f"Ubuntu server version. Default "
@@ -705,7 +705,7 @@ def main():
                          'Megabytes')
     rebuild.add_argument('-n', '--hostname', help="set VM hostname")
     rebuild.add_argument('-p', '--port', help="set ssh port for VM")
-    rebuild.add_argument('-u', '--user-data-path',
+    rebuild.add_argument('-u', '--cloud-config',
                          help="Alternative user-data template filepath")
     rebuild.add_argument('-v', '--version', help='Ubuntu server version')
     rebuild.set_defaults(func=vmrebuild)
