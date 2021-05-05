@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import collections.abc
 import os
 import shutil
 import string
@@ -11,6 +12,8 @@ import time
 import uuid
 import xml.dom.minidom
 
+import yaml
+
 
 CACHE_DIR = os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
 CLOUD_IMAGE = "ci.iso"
@@ -19,7 +22,7 @@ instance-id: $instance_id
 local-hostname: $vmhostname
 ''')
 UBUNTU_VERSION = '20.04'
-USER_DATA_TPL = string.Template('''\
+USER_DATA = '''\
 #cloud-config
 users:
   - default
@@ -34,7 +37,14 @@ power_state:
   mode: poweroff
   timeout: 10
   condition: True
-''')
+boxpy_data:
+  cpus: 1
+  disk_size: 10240
+  key: ~/.ssh/id_rsa
+  memory: 2048
+  port: 2222
+  version: 20.04
+'''
 COMPLETIONS = {'bash': '''\
 _boxpy() {
     local cur prev words cword _GNUSED
@@ -203,6 +213,87 @@ class BoxConvertionError(BoxError):
 
 class BoxSysCommandError(BoxError):
     pass
+
+
+class Config:
+    ATTRS = ('cpus', 'cloud_config', 'disk_size', 'hostname', 'key',
+             'memory', 'name', 'port', 'version')
+
+    def __init__(self, args, vbox=None):
+        self.cloud_config = None
+        self.cpus = None
+        self.disk_size = None
+        self.hostname = None
+        self.key = None
+        self.memory = None
+        self.name = None
+        self.port = None
+        self.version = None
+
+        # first, grab the cloud config file
+        self._custom_file = args.cloud_config
+
+        # initialize default from yaml file(s) first
+        self._combine_cc(vbox)
+
+        # than override all of the attrs with provided args from commandline.
+        # If the value of rhe
+        # in case we have vbox object provided.
+        # this means that we need to read params stored on the VM attributes.
+        vm_info = vbox.get_vm_info() if vbox else {}
+        for attr in self.ATTRS:
+            val = getattr(args, attr, None) or vm_info.get(attr)
+            if not val:
+                continue
+            setattr(self, attr, str(val))
+
+        self.hostname = self.hostname or self._normalize_name()
+
+    def _normalize_name(self):
+        name = self.name.replace(' ', '-')
+        name = name.encode('ascii', errors='ignore')
+        name = name.decode('utf-8')
+        return ''.join(x for x in name if x.isalnum() or x == '-')
+
+    def _combine_cc(self, vbox):
+        # that's default config
+        conf = yaml.safe_load(USER_DATA)
+
+        if vbox and not self._custom_file:
+            # in case of not provided (new) custom cloud config, and vbox
+            # object is present, read information out of potentially stored
+            # file in VM attributes.
+            vm_info = vbox.get_vm_info()
+            if os.path.exists(vm_info.get('cloud_config')):
+                self._custom_file = vm_info['cloud_config']
+
+        # read user custom cloud config (if present) and update config dict
+        if self._custom_file and os.path.exists(self._custom_file):
+            with open(self._custom_file) as fobj:
+                custom_conf = yaml.safe_load(fobj)
+                conf = self._update(conf, custom_conf)
+
+        # set the attributes.
+        for key, val in conf.get('boxpy_data', {}).items():
+            if not val:
+                continue
+            setattr(self, key, str(val))
+
+        if conf.get('boxpy_data'):
+            del conf['boxpy_data']
+
+        self._conf = "#cloud-config\n" + yaml.safe_dump(conf)
+
+    def get_cloud_config_tpl(self):
+        return string.Template(self._conf)
+
+    def _update(self, source, update):
+        for key, val in update.items():
+            if isinstance(val, collections.abc.Mapping):
+                source[key] = self._update(source.get(key, {}), val)
+            else:
+                source[key] = val
+        return source
 
 
 class VBoxManage:
@@ -491,10 +582,10 @@ class Image:
 
 
 class IsoImage:
-    def __init__(self, hostname, ssh_key, user_data=None):
+    def __init__(self, conf):
         self._tmp = tempfile.mkdtemp()
-        self.hostname = hostname
-        self.ssh_key_path = ssh_key
+        self.hostname = conf.hostname
+        self.ssh_key_path = conf.key
 
         if not self.ssh_key_path.endswith('.pub'):
             self.ssh_key_path += '.pub'
@@ -502,13 +593,9 @@ class IsoImage:
             self.ssh_key_path = os.path.join(os.path.expanduser("~/.ssh"),
                                              self.ssh_key_path)
         if not os.path.exists(self.ssh_key_path):
-            raise BoxNotFound(f'Cannot find default ssh public key: '
-                              f'{self.ssh_key_path}')
+            raise BoxNotFound(f'Cannot find ssh public key: {conf.key}')
 
-        self.ud_tpl = None
-        if user_data and os.path.exists(user_data):
-            with open(user_data) as fobj:
-                self.ud_tpl = string.Template(fobj.read())
+        self.ud_tpl = conf.get_cloud_config_tpl()
 
     def get_generated_image(self):
         self._create_cloud_image()
@@ -529,8 +616,7 @@ class IsoImage:
             ssh_pub_key = fobj.read().strip()
 
         with open(os.path.join(self._tmp, 'user-data'), 'w') as fobj:
-            template = self.ud_tpl or USER_DATA_TPL
-            fobj.write(template.substitute({'ssh_key': ssh_pub_key}))
+            fobj.write(self.ud_tpl.substitute({'ssh_key': ssh_pub_key}))
 
         mkiso = 'mkisofs' if shutil.which('mkisofs') else 'genisoimage'
 
@@ -544,30 +630,23 @@ class IsoImage:
 
 
 def vmcreate(args):
-    vbox = VBoxManage(args.name)
-    if not vbox.create(args.cpus, args.memory, args.port):
+    conf = Config(args)
+    vbox = VBoxManage(conf.name)
+    if not vbox.create(conf.cpus, conf.memory, conf.port):
         return 10
     vbox.create_controller('IDE', 'ide')
     vbox.create_controller('SATA', 'sata')
 
-    def normalize_name(name):
-        name = name.replace(' ', '-')
-        name = name.encode('ascii', errors='ignore')
-        name = name.decode('utf-8')
-        return ''.join(x for x in name if x.isalnum() or x == '-')
+    vbox.setextradata('key', conf.key)
+    vbox.setextradata('hostname', conf.hostname)
+    vbox.setextradata('version', conf.version)
+    if conf.cloud_config:
+        vbox.setextradata('cloud_config', conf.cloud_config)
 
-    hostname = args.hostname or normalize_name(args.name)
+    image = Image(vbox, conf.version)
+    path_to_disk = image.convert_to_vdi(conf.name + '.vdi', conf.disk_size)
 
-    vbox.setextradata('key', args.key)
-    vbox.setextradata('hostname', hostname)
-    vbox.setextradata('version', args.version)
-    if args.cloud_config:
-        vbox.setextradata('cloud_config', args.cloud_config)
-
-    image = Image(vbox, args.version)
-    path_to_disk = image.convert_to_vdi(args.name + '.vdi', args.disk_size)
-
-    iso = IsoImage(hostname, args.key, args.cloud_config)
+    iso = IsoImage(conf)
     path_to_iso = iso.get_generated_image()
     vbox.storageattach('SATA', 0, 'hdd', path_to_disk)
     vbox.storageattach('IDE', 1, 'dvddrive', path_to_iso)
@@ -615,6 +694,7 @@ def vmlist(args):
 
 def vmrebuild(args):
     vbox = VBoxManage(args.name)
+    conf = Config(args, vbox)
 
     vbox.poweroff(silent=True)
 
@@ -624,18 +704,8 @@ def vmrebuild(args):
         # no disks, return
         return 1
 
-    vm_info = vbox.get_vm_info()
-
-    args.cpus = args.cpus or vm_info['cpus']
-    args.hostname = args.hostname or vm_info['hostname']
-    args.key = args.key or vm_info['key']
-    args.memory = args.memory or vm_info['memory']
-    args.port = args.port or vm_info.get('port')
-    args.cloud_config = args.cloud_config or vm_info.get('cloud_config')
-    args.version = args.version or vm_info['version']
-
-    if not args.disk_size:
-        args.disk_size = vbox.get_media_size(disk_path)
+    if not conf.disk_size:
+        conf.disk_size = vbox.get_media_size(disk_path)
 
     vmdestroy(args)
     vmcreate(args)
@@ -659,25 +729,22 @@ def main():
                                    'drive and run')
     create.set_defaults(func=vmcreate)
     create.add_argument('name', help='name of the VM')
-    create.add_argument('-c', '--cpus', default=1, type=int,
-                        help="amount of CPUs to be configured. Default 1.")
-    create.add_argument('-d', '--disk-size', default='10240',
-                        help="disk size to be expanded to. By default to 10GB")
-    create.add_argument('-k', '--key',
-                        default=os.path.expanduser("~/.ssh/id_rsa"),
-                        help="SSH key to be add to the config drive. Default "
-                        "~/.ssh/id_rsa")
-    create.add_argument('-m', '--memory', default='2048',
-                        help="amount of memory in Megabytes, default 2GB")
+    create.add_argument('-c', '--cpus', type=int, help="amount of CPUs to be "
+                        "configured. Default 1.")
+    create.add_argument('-d', '--disk-size', help="disk size to be expanded "
+                        "to. By default to 10GB")
+    create.add_argument('-k', '--key', help="SSH key to be add to the config "
+                        "drive. Default ~/.ssh/id_rsa")
+    create.add_argument('-m', '--memory', help="amount of memory in "
+                        "Megabytes, default 2GB")
     create.add_argument('-n', '--hostname',
                         help="VM hostname. Default same as vm name")
-    create.add_argument('-p', '--port', default='2222',
-                        help="set ssh port for VM, default 2222")
+    create.add_argument('-p', '--port', help="set ssh port for VM, default "
+                        "2222")
     create.add_argument('-u', '--cloud-config',
                         help="Alternative user-data template filepath")
-    create.add_argument('-v', '--version', default=UBUNTU_VERSION,
-                        help=f"Ubuntu server version. Default "
-                        f"{UBUNTU_VERSION}")
+    create.add_argument('-v', '--version', help=f"Ubuntu server version. "
+                        f"Default {UBUNTU_VERSION}")
 
     destroy = subparsers.add_parser('destroy', help='destroy VM')
     destroy.add_argument('name', help='name or UUID of the VM')
