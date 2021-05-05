@@ -590,6 +590,9 @@ class IsoImage:
         if not self.ssh_key_path.endswith('.pub'):
             self.ssh_key_path += '.pub'
         if not os.path.exists(self.ssh_key_path):
+            self.ssh_key_path = os.path.join(os.path
+                                             .expanduser(self.ssh_key_path))
+        if not os.path.exists(self.ssh_key_path):
             self.ssh_key_path = os.path.join(os.path.expanduser("~/.ssh"),
                                              self.ssh_key_path)
         if not os.path.exists(self.ssh_key_path):
@@ -669,6 +672,8 @@ def vmcreate(args):
     except KeyboardInterrupt:
         print('\nIterrupted, cleaning up.')
         VBoxManage(args.name).destroy()
+        iso.cleanup()
+        image.cleanup()
         return 1
 
     # dettach ISO image
