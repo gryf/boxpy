@@ -58,7 +58,7 @@ use it ad-hoc, or place on your ``.bashrc`` or whatever:
 
 currently there are four commands available:
 
-- ``list`` - for quickly listing running VMs
+- ``list`` - for quickly listing all/running VMs
 - ``destroy`` - that is probably obvious one
 - ``create`` and ``rebuild``
 
@@ -108,7 +108,7 @@ need to provide all the option every time you boot up similar VM. For example:
      ssh_key: vm
      cpus: 4
      memory: 4GB
-     disk-size: 20GB
+     disk_size: 20GB
 
 Contents of the user script will be merged with the default one, so expect,
 that user ``ubuntu`` will be there, and magically you'll be able to connect to

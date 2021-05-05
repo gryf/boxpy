@@ -658,6 +658,12 @@ def vmcreate(args):
     # give VBox some time to actually change the state of the VM before query
     time.sleep(3)
 
+    def _cleanup(vbox, iso, image, path_to_iso):
+        vbox.storageattach('IDE', 1, 'dvddrive', 'none')
+        vbox.closemedium('dvd', path_to_iso)
+        iso.cleanup()
+        image.cleanup()
+
     # than, let's try to see if boostraping process has finished
     print('Waiting for cloud init to finish ', end='')
     try:
@@ -671,16 +677,14 @@ def vmcreate(args):
                 break
     except KeyboardInterrupt:
         print('\nIterrupted, cleaning up.')
-        VBoxManage(args.name).destroy()
-        iso.cleanup()
-        image.cleanup()
+        vbox.poweroff(silent=True)
+        time.sleep(1)  # give some time to turn it off
+        _cleanup(vbox, iso, image, path_to_iso)
+        vbox.destroy()
         return 1
 
     # dettach ISO image
-    vbox.storageattach('IDE', 1, 'dvddrive', 'none')
-    vbox.closemedium('dvd', path_to_iso)
-    iso.cleanup()
-    image.cleanup()
+    _cleanup(vbox, iso, image, path_to_iso)
     vbox.poweron()
     print('You can access your VM by issuing:')
     print(f'ssh -p {args.port} -i {iso.ssh_key_path[:-4]} ubuntu@localhost')
