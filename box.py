@@ -578,14 +578,20 @@ def vmcreate(args):
 
     # than, let's try to see if boostraping process has finished
     print('Waiting for cloud init to finish ', end='')
-    while True:
-        if vbox.vm_info['uuid'] in vbox.get_running_vms():
-            print('.', end='')
-            sys.stdout.flush()
-            time.sleep(3)
-        else:
-            print(' done.')
-            break
+    try:
+        while True:
+            if vbox.vm_info['uuid'] in vbox.get_running_vms():
+                print('.', end='')
+                sys.stdout.flush()
+                time.sleep(3)
+            else:
+                print(' done.')
+                break
+    except KeyboardInterrupt:
+        print('\nIterrupted, cleaning up.')
+        VBoxManage(args.name).destroy()
+        return 1
+
     # dettach ISO image
     vbox.storageattach('IDE', 1, 'dvddrive', 'none')
     vbox.closemedium('dvd', path_to_iso)
