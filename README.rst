@@ -105,7 +105,7 @@ need to provide all the option every time you boot up similar VM. For example:
    runcmd:
      - [su, -, ubuntu, -c, "echo 'set nocompatible' > .vimrc"]
    boxpy_data:
-     ssh_key: vm
+     key: vm
      cpus: 4
      memory: 4GB
      disk_size: 20GB
