@@ -658,6 +658,7 @@ def vmcreate(args):
     time.sleep(3)
 
     def _cleanup(vbox, iso, image, path_to_iso):
+        time.sleep(1)  # wait a bit, for VM shutdown to complete
         vbox.storageattach('IDE', 1, 'dvddrive', 'none')
         vbox.closemedium('dvd', path_to_iso)
         iso.cleanup()
@@ -677,7 +678,6 @@ def vmcreate(args):
     except KeyboardInterrupt:
         print('\nIterrupted, cleaning up.')
         vbox.poweroff(silent=True)
-        time.sleep(1)  # give some time to turn it off
         _cleanup(vbox, iso, image, path_to_iso)
         vbox.destroy()
         return 1
@@ -686,7 +686,7 @@ def vmcreate(args):
     _cleanup(vbox, iso, image, path_to_iso)
     vbox.poweron()
     print('You can access your VM by issuing:')
-    print(f'ssh -p {args.port} -i {iso.ssh_key_path[:-4]} ubuntu@localhost')
+    print(f'ssh -p {conf.port} -i {iso.ssh_key_path[:-4]} ubuntu@localhost')
     return 0
 
 
