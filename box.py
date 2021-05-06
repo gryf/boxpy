@@ -220,6 +220,7 @@ class Config:
              'memory', 'name', 'port', 'version')
 
     def __init__(self, args, vbox=None):
+        self.advanced = None
         self.cpus = None
         self.disk_size = None
         self.hostname = None
@@ -279,6 +280,8 @@ class Config:
             setattr(self, key, str(val))
 
         if conf.get('boxpy_data'):
+            if conf['boxpy_data'].get('advanced'):
+                self.advanced = conf['boxpy_data']['advanced']
             del conf['boxpy_data']
 
         self._conf = "#cloud-config\n" + yaml.safe_dump(conf)
@@ -490,6 +493,11 @@ class VBoxManage:
                             key, val]) != 0:
             raise BoxVBoxFailure(f'Failed to start: {self.name_or_uuid}.')
 
+    def add_nic(self, nic, kind):
+        if subprocess.call(['vboxmanage', 'modifyvm', self.name_or_uuid,
+                            f'--{nic}', kind]) != 0:
+            raise BoxVBoxFailure(f'Cannot modify VM "{self.name_or_uuid}".')
+
     def _get_vm_config(self):
         if self.vm_info.get('config_file'):
             return self.vm_info['config_file']
@@ -653,6 +661,13 @@ def vmcreate(args):
     vbox.storageattach('SATA', 0, 'hdd', path_to_disk)
     vbox.storageattach('IDE', 1, 'dvddrive', path_to_iso)
 
+    # advanced options, currnetly pretty hardcoded
+    if conf.advanced:
+        for key, val in conf.advanced.items():
+            if key.startswith('nic'):
+                vbox.add_nic(key, val)
+
+    # start the VM and wait for cloud-init to finish
     vbox.poweron()
     # give VBox some time to actually change the state of the VM before query
     time.sleep(3)
