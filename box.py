@@ -220,7 +220,6 @@ class Config:
              'memory', 'name', 'port', 'version')
 
     def __init__(self, args, vbox=None):
-        self.cloud_config = None
         self.cpus = None
         self.disk_size = None
         self.hostname = None
@@ -231,7 +230,7 @@ class Config:
         self.version = None
 
         # first, grab the cloud config file
-        self._custom_file = args.cloud_config
+        self.user_data = args.cloud_config
 
         # initialize default from yaml file(s) first
         self._combine_cc(vbox)
@@ -259,17 +258,17 @@ class Config:
         # that's default config
         conf = yaml.safe_load(USER_DATA)
 
-        if vbox and not self._custom_file:
+        if vbox and not self.user_data:
             # in case of not provided (new) custom cloud config, and vbox
             # object is present, read information out of potentially stored
             # file in VM attributes.
             vm_info = vbox.get_vm_info()
-            if os.path.exists(vm_info.get('cloud_config')):
-                self._custom_file = vm_info['cloud_config']
+            if os.path.exists(vm_info.get('user_data')):
+                self.user_data = vm_info['user_data']
 
         # read user custom cloud config (if present) and update config dict
-        if self._custom_file and os.path.exists(self._custom_file):
-            with open(self._custom_file) as fobj:
+        if self.user_data and os.path.exists(self.user_data):
+            with open(self.user_data) as fobj:
                 custom_conf = yaml.safe_load(fobj)
                 conf = self._update(conf, custom_conf)
 
@@ -643,8 +642,8 @@ def vmcreate(args):
     vbox.setextradata('key', conf.key)
     vbox.setextradata('hostname', conf.hostname)
     vbox.setextradata('version', conf.version)
-    if conf.cloud_config:
-        vbox.setextradata('cloud_config', conf.cloud_config)
+    if conf.user_data:
+        vbox.setextradata('user_data', conf.user_data)
 
     image = Image(vbox, conf.version)
     path_to_disk = image.convert_to_vdi(conf.name + '.vdi', conf.disk_size)
