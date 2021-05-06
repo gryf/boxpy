@@ -377,34 +377,23 @@ class VBoxManage:
             if line.startswith('Config file:'):
                 self.vm_info['config_file'] = line.split('Config '
                                                          'file:')[1].strip()
-                continue
-
-            if line.startswith('Memory size'):
-                mem = line.split('Memory size')[1].strip()
-                if mem.isnumeric():
-                    self.vm_info['memory'] = mem
-                else:
-                    # 12288MB
-                    self.vm_info['memory'] = mem[:-2]
-                continue
-
-            if line.startswith('Number of CPUs:'):
-                self.vm_info['cpus'] = line.split('Number of CPUs:')[1].strip()
-                continue
-
-            if line.startswith('UUID:'):
-                self.vm_info['uuid'] = line.split('UUID:')[1].strip()
+                break
 
         dom = xml.dom.minidom.parse(self.vm_info['config_file'])
+        gebtn = dom.getElementsByTagName
 
-        for extradata in dom.getElementsByTagName('ExtraDataItem'):
+        self.vm_info['cpus'] = gebtn('CPU')[0].getAttribute('count')
+        self.vm_info['uuid'] = gebtn('Machine')[0].getAttribute('uuid')[1:-1]
+        self.vm_info['memory'] = gebtn('Memory')[0].getAttribute('RAMSize')
+
+        for extradata in gebtn('ExtraDataItem'):
             key = extradata.getAttribute('name')
             val = extradata.getAttribute('value')
             self.vm_info[key] = val
 
-        if len(dom.getElementsByTagName('Forwarding')):
-            fw = dom.getElementsByTagName('Forwarding')[0]
-            self.vm_info['port'] = fw.getAttribute('hostport')
+        if len(gebtn('Forwarding')):
+            fw = gebtn('Forwarding')[0].getAttribute('hostport')
+            self.vm_info['port'] = fw
 
         return self.vm_info
 
