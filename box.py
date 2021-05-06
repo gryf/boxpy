@@ -241,13 +241,16 @@ class Config:
             if not vm_info.get(attr):
                 continue
             setattr(self, attr, vm_info[attr])
-       # initialize default from yaml file(s) first
+
+        # next, grab the cloud config file
+        self.user_data = args.cloud_config or vm_info.get('user_data')
+
+        # combine it with the defaults, set attributes by boxpy_data
+        # definition, if found
         self._combine_cc(vbox)
 
-        # than override all of the attrs with provided args from commandline.
-        # If the value of rhe
-        # in case we have vbox object provided.
-        # this means that we need to read params stored on the VM attributes.
+        # than, override all of the attributes with provided arguments from
+        # the command line
         vm_info = vbox.get_vm_info() if vbox else {}
         for attr in self.ATTRS:
             val = getattr(args, attr, None) or vm_info.get(attr)
@@ -255,11 +258,19 @@ class Config:
                 continue
             setattr(self, attr, str(val))
 
+        # finally, figure out host name
         self.hostname = self.hostname or self._normalize_name()
 
     def get_cloud_config_tpl(self):
         conf = "#cloud-config\n" + yaml.safe_dump(self._conf)
         return string.Template(conf)
+
+    def _set_defaults(self):
+        conf = yaml.safe_load(USER_DATA)
+
+        # update attributes with default values
+        for key, val in conf['boxpy_data'].items():
+            setattr(self, key, str(val))
 
     def _normalize_name(self):
         name = self.name.replace(' ', '-')
@@ -269,14 +280,6 @@ class Config:
 
     def _combine_cc(self, vbox):
         conf = yaml.safe_load(USER_DATA)
-
-        if vbox and not self.user_data:
-            # in case of not provided (new) custom cloud config, and vbox
-            # object is present, read information out of potentially stored
-            # file in VM attributes.
-            vm_info = vbox.get_vm_info()
-            if os.path.exists(vm_info.get('user_data')):
-                self.user_data = vm_info['user_data']
 
         # read user custom cloud config (if present) and update config dict
         if self.user_data and os.path.exists(self.user_data):
@@ -648,8 +651,9 @@ class IsoImage:
                                      'drive')
 
 
-def vmcreate(args):
-    conf = Config(args)
+def vmcreate(args, conf=None):
+    if not conf:
+        conf = Config(args)
     vbox = VBoxManage(conf.name)
     if not vbox.create(conf.cpus, conf.memory, conf.port):
         return 10
@@ -740,7 +744,7 @@ def vmrebuild(args):
         conf.disk_size = vbox.get_media_size(disk_path)
 
     vmdestroy(args)
-    vmcreate(args)
+    vmcreate(args, conf)
     return 0
 
 
