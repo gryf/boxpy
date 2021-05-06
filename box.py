@@ -226,14 +226,22 @@ class Config:
         self.hostname = None
         self.key = None
         self.memory = None
-        self.name = None
-        self.port = None
+        self.name = args.name  # this one is not stored anywhere
+        self.port = None       # at least is not even tried to be retrieved
         self.version = None
+        self._conf = {}
 
-        # first, grab the cloud config file
-        self.user_data = args.cloud_config
+        # set defaults stored in hard coded yaml
+        self._set_defaults()
 
-        # initialize default from yaml file(s) first
+        # look at VM metadata, and gather known attributes, and update it
+        # accordingly
+        vm_info = vbox.get_vm_info() if vbox else {}
+        for attr in self.ATTRS:
+            if not vm_info.get(attr):
+                continue
+            setattr(self, attr, vm_info[attr])
+       # initialize default from yaml file(s) first
         self._combine_cc(vbox)
 
         # than override all of the attrs with provided args from commandline.
@@ -249,6 +257,10 @@ class Config:
 
         self.hostname = self.hostname or self._normalize_name()
 
+    def get_cloud_config_tpl(self):
+        conf = "#cloud-config\n" + yaml.safe_dump(self._conf)
+        return string.Template(conf)
+
     def _normalize_name(self):
         name = self.name.replace(' ', '-')
         name = name.encode('ascii', errors='ignore')
@@ -256,7 +268,6 @@ class Config:
         return ''.join(x for x in name if x.isalnum() or x == '-')
 
     def _combine_cc(self, vbox):
-        # that's default config
         conf = yaml.safe_load(USER_DATA)
 
         if vbox and not self.user_data:
@@ -273,21 +284,19 @@ class Config:
                 custom_conf = yaml.safe_load(fobj)
                 conf = self._update(conf, custom_conf)
 
-        # set the attributes.
+        # update the attributes with data from read user cloud config
         for key, val in conf.get('boxpy_data', {}).items():
             if not val:
                 continue
             setattr(self, key, str(val))
 
+        # remove boxpy_data since it will be not needed on the guest side
         if conf.get('boxpy_data'):
             if conf['boxpy_data'].get('advanced'):
                 self.advanced = conf['boxpy_data']['advanced']
             del conf['boxpy_data']
 
-        self._conf = "#cloud-config\n" + yaml.safe_dump(conf)
-
-    def get_cloud_config_tpl(self):
-        return string.Template(self._conf)
+        self._conf = conf
 
     def _update(self, source, update):
         for key, val in update.items():
