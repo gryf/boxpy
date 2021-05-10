@@ -13,7 +13,6 @@ I've wrote this little tool just to not click myself to death using web browser
 for downloading cloud images, and going through VirtualBox GUI (or figuring out
 weird named options for ``vboxmanage`` ;P)
 
-
 Perhaps other distros would be supported in the future.
 
 
@@ -33,7 +32,16 @@ Requirements
 How to run it
 -------------
 
-First, make sure you fulfill the requirements, than you can issue:
+First, make sure you fulfill the requirements; either by using packages from
+your operating system, or by using virtualenv for Python requirements, i.e.:
+
+.. code:: shell-session
+
+   $ python -m virtualenv .venv
+   $ . .venv/bin/activate
+   (.venv) $ pip install requirements.txt
+
+than you can issue:
 
 .. code:: shell-session
 
@@ -47,7 +55,9 @@ or simply link it somewhere in the path:
    $ chmod +x ~/bin/boxpy
 
 and now you can issue some command. There are four command for simple managing
-VMs, maybe some other will be available in the future. Who knows.
+VMs, maybe some other will be available in the future. Who knows. For
+virtualenv it's a little more complicated, so using pyyaml from package
+repository is preferred.
 
 For your convenience there is a bash completion for each command, so you can
 use it ad-hoc, or place on your ``.bashrc`` or whatever:
@@ -122,6 +132,9 @@ key is not provided.
 
 Moreover, there will be some tools installed and simple vim config
 initialized, just to make you an idea, what could be done with it.
+
+You can find some real world examples of the yaml cloud-init files that I use
+in examples directory.
 
 
 License

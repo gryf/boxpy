@@ -1,0 +1,177 @@
+#cloud-config
+packages:
+  - ccze
+  - exuberant-ctags
+  - flake8
+  - git-review
+  - htop
+  - ipython3
+  - jq
+  - mc
+  - python-apsw
+  - python3-flake8
+  - python3-jedi
+  - python3-pip
+  - rlwrap
+  - silversearcher-ag
+  - tmate
+  - tmux
+  - vim-nox
+write_files:
+  - path: /etc/netplan/80-second.yaml
+    permissions: '0644'
+    content: |
+      network:
+        version: 2
+        ethernets:
+          enp0s8:
+            dhcp4: false
+            match:
+              name: enp0s8
+            addresses:
+              - 192.168.10.10/24
+  - path: /tmp/local.conf
+    permissions: '0644'
+    owner: ubuntu:ubuntu
+    content: |
+      [[local|localrc]]
+      disable_all_services
+      
+      # temporary testing stuff
+      
+      # crio:
+      #CONTAINER_ENGINE=crio
+      #CRIO_VERSION="1.20.2"
+      
+      # kubeadm
+      #K8S_VERSION=1.20.2-00
+      #enable_service k8s-master
+      #enable_service k8s-node
+      #enable_service container
+      
+      disable_service tls-proxy
+      
+      # Cinder
+      disable_service c-api
+      disable_service c-bak
+      disable_service c-sch
+      disable_service c-vol
+      disable_service cinder
+      
+      # Coredns
+      disable_service coredns
+      
+      # Dstat (started to fail recently)
+      disable_service dstat
+      
+      # ETCD
+      enable_service etcd3
+      
+      # Glance
+      enable_service g-api
+      enable_service g-reg
+      
+      # Horizon
+      disable_service horizon
+      
+      # Keystone
+      enable_service key
+      
+      # Kubernetes
+      # ==========
+      #
+      # Kubernetes is run from the hyperkube docker image
+      # If you already have a Kubernetes deployment, you can use it instead and omit
+      # enabling the Kubernetes service (except Kubelet, which must be run by
+      # devstack so that it uses our development CNI driver.
+      #
+      # The default is, again, for devstack to run the Kubernetes services:
+      enable_service kubernetes-master
+      # enable_service kubernetes-worker
+      
+      # kuryr
+      enable_service kuryr-kubernetes
+      enable_service kuryr-daemon
+      
+      # mysql.
+      enable_service mysql
+      
+      # Nova services
+      enable_service n-api
+      enable_service n-api-meta
+      enable_service n-cond
+      enable_service n-cpu
+      enable_service n-sch
+      enable_service neutron
+      enable_service o-api
+      enable_service o-cw
+      enable_service o-hk
+      enable_service o-hm
+      enable_service octavia
+      
+      # Placement API
+      enable_service placement-api
+      enable_service placement-client
+      
+      # Neutron services
+      enable_service q-agt
+      enable_service q-dhcp
+      enable_service q-l3
+      enable_service q-meta
+      enable_service q-svc
+      enable_service rabbit
+      disable_service s-account
+      disable_service s-container
+      disable_service s-object
+      disable_service s-proxy
+      enable_service tempest
+      enable_service tls-proxy
+      
+      # Vars
+      ADMIN_PASSWORD="secretadmin"
+      DATABASE_PASSWORD="secretdatabase"
+      ETCD_USE_RAMDISK="True"
+      #IMAGE_URLS+=",http://download.cirros-cloud.net/0.3.4/cirros-0.3.4-x86_64-disk.img"
+      KURYR_ENABLED_HANDLERS="vif,endpoints,service,namespace,pod_label,policy,kuryrnetworkpolicy,kuryrnetwork,kuryrport,kuryrloadbalancer"
+      KURYR_EP_DRIVER_OCTAVIA_PROVIDER="amphora"
+      KURYR_K8S_API_PORT="6443"
+      KURYR_K8S_CLOUD_PROVIDER="False"
+      KURYR_K8S_CONTAINERIZED_DEPLOYMENT="True"
+      KURYR_K8S_MULTI_WORKER_TESTS="True"
+      KURYR_SG_DRIVER="policy"
+      KURYR_SUBNET_DRIVER="namespace"
+      LOGFILE="/opt/stack/logs/devstacklog.txt"
+      LOG_COLOR="False"
+      OCTAVIA_AMP_IMAGE_FILE="/tmp/test-only-amphora-x64-haproxy-ubuntu-bionic.qcow2"
+      OCTAVIA_AMP_IMAGE_NAME="test-only-amphora-x64-haproxy-ubuntu-bionic"
+      OCTAVIA_AMP_IMAGE_SIZE="3"
+      RABBIT_PASSWORD="secretrabbit"
+      RECLONE="no"
+      SERVICE_PASSWORD="secretservice"
+      SERVICE_TOKEN="password"
+      TEMPEST_PLUGINS="/opt/stack/kuryr-tempest-plugin"
+      USE_PYTHON3="True"
+      
+      LIBS_FROM_GIT=cinder,devstack,devstack-gate,devstack-plugin-container,glance,keystone,kuryr-kubernetes,kuryr-tempest-plugin,neutron,nova,octavia,placement,python-octaviaclient,requirements,swift,tempest
+      
+      # enabled plugins
+      enable_plugin devstack-plugin-container https://opendev.org/openstack/devstack-plugin-container
+      #enable_plugin kuryr-kubernetes https://opendev.org/openstack/kuryr-kubernetes
+      enable_plugin kuryr-kubernetes https://github.com/gryf/kuryr-kubernetes kubeadm-multinode
+      enable_plugin kuryr-tempest-plugin https://opendev.org/openstack/kuryr-tempest-plugin
+      enable_plugin neutron https://opendev.org/openstack/neutron
+      enable_plugin octavia https://opendev.org/openstack/octavia
+runcmd:
+  - [su, -, ubuntu, -c, "git clone https://github.com/gryf/vmstrap"]
+  - [su, -, ubuntu, -c, "vmstrap/bootstrap.sh"]
+  - [su, -, ubuntu, -c, "echo 'export HOST_IP=192.168.10.10' >> .bashrc"]
+  - [su, -, ubuntu, -c, "cp /tmp/local.conf /home/ubuntu/devstack/"]
+debug:
+  verbose: true
+boxpy_data:
+  key: vm
+  cpus: 4
+  memory: 16GB
+  disk_size: 50GB
+  advanced:
+    nic2: intnet
