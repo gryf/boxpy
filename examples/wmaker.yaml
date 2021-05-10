@@ -1,0 +1,35 @@
+packages:
+  - build-essential
+  - gettext
+  - libfontconfig1-dev
+  - libgif-dev
+  - libjpeg-dev
+  - libmagickwand-6.q16-dev
+  - libpango1.0-dev
+  - libpng-dev
+  - libsm-dev
+  - libtiff-dev
+  - libtool
+  - libx11-dev
+  - libxext-dev
+  - libxft-dev
+  - libxinerama-dev
+  - libxkbfile-dev
+  - libxmu-dev
+  - libxpm-dev
+  - libxrandr-dev
+  - libxrender-dev
+  - libxt-dev
+  - make
+  - sharutils
+  - xinit
+runcmd:
+  - [su, -, ubuntu, -c, "git clone https://github.com/gryf/wmaker -b experimental"]
+  - [su, -, ubuntu, -c, "git clone https://github.com/gryf/vmstrap"]
+  - [su, -, ubuntu, -c, "vmstrap/bootstrap.sh"]
+  - [rm, -fr, /home/ubuntu/vmstrap]
+boxpy_data:
+  key: vm
+  cpus: 4
+  memory: 4GB
+  disk_size: 20GB
