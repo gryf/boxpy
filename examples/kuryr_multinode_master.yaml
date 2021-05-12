@@ -1,4 +1,3 @@
-#cloud-config
 packages:
   - ccze
   - exuberant-ctags
@@ -37,18 +36,6 @@ write_files:
       [[local|localrc]]
       disable_all_services
       
-      # temporary testing stuff
-      
-      # crio:
-      #CONTAINER_ENGINE=crio
-      #CRIO_VERSION="1.20.2"
-      
-      # kubeadm
-      #K8S_VERSION=1.20.2-00
-      #enable_service k8s-master
-      #enable_service k8s-node
-      #enable_service container
-      
       disable_service tls-proxy
       
       # Cinder
@@ -61,7 +48,7 @@ write_files:
       # Coredns
       disable_service coredns
       
-      # Dstat (started to fail recently)
+      # Dstat 
       disable_service dstat
       
       # ETCD
@@ -77,17 +64,8 @@ write_files:
       # Keystone
       enable_service key
       
-      # Kubernetes
-      # ==========
-      #
-      # Kubernetes is run from the hyperkube docker image
-      # If you already have a Kubernetes deployment, you can use it instead and omit
-      # enabling the Kubernetes service (except Kubelet, which must be run by
-      # devstack so that it uses our development CNI driver.
-      #
-      # The default is, again, for devstack to run the Kubernetes services:
+      # kubernetes
       enable_service kubernetes-master
-      # enable_service kubernetes-worker
       
       # kuryr
       enable_service kuryr-kubernetes
@@ -131,15 +109,12 @@ write_files:
       ADMIN_PASSWORD="secretadmin"
       DATABASE_PASSWORD="secretdatabase"
       ETCD_USE_RAMDISK="True"
-      #IMAGE_URLS+=",http://download.cirros-cloud.net/0.3.4/cirros-0.3.4-x86_64-disk.img"
       KURYR_ENABLED_HANDLERS="vif,endpoints,service,namespace,pod_label,policy,kuryrnetworkpolicy,kuryrnetwork,kuryrport,kuryrloadbalancer"
       KURYR_EP_DRIVER_OCTAVIA_PROVIDER="amphora"
       KURYR_K8S_API_PORT="6443"
       KURYR_K8S_CLOUD_PROVIDER="False"
       KURYR_K8S_CONTAINERIZED_DEPLOYMENT="True"
       KURYR_K8S_MULTI_WORKER_TESTS="True"
-      KURYR_SG_DRIVER="policy"
-      KURYR_SUBNET_DRIVER="namespace"
       LOGFILE="/opt/stack/logs/devstacklog.txt"
       LOG_COLOR="False"
       OCTAVIA_AMP_IMAGE_FILE="/tmp/test-only-amphora-x64-haproxy-ubuntu-bionic.qcow2"
@@ -156,7 +131,6 @@ write_files:
       
       # enabled plugins
       enable_plugin devstack-plugin-container https://opendev.org/openstack/devstack-plugin-container
-      #enable_plugin kuryr-kubernetes https://opendev.org/openstack/kuryr-kubernetes
       enable_plugin kuryr-kubernetes https://github.com/gryf/kuryr-kubernetes kubeadm-multinode
       enable_plugin kuryr-tempest-plugin https://opendev.org/openstack/kuryr-tempest-plugin
       enable_plugin neutron https://opendev.org/openstack/neutron
@@ -164,10 +138,9 @@ write_files:
 runcmd:
   - [su, -, ubuntu, -c, "git clone https://github.com/gryf/vmstrap"]
   - [su, -, ubuntu, -c, "vmstrap/bootstrap.sh"]
+  - [rm, -fr, /home/ubuntu/vmstrap]
   - [su, -, ubuntu, -c, "echo 'export HOST_IP=192.168.10.10' >> .bashrc"]
   - [su, -, ubuntu, -c, "cp /tmp/local.conf /home/ubuntu/devstack/"]
-debug:
-  verbose: true
 boxpy_data:
   key: vm
   cpus: 4
