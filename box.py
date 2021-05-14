@@ -133,8 +133,8 @@ _boxpy() {
             fi
             ;;
         create|rebuild)
-            items=(--cpus --disk-size --key --memory --hostname
-                --port --config --version)
+            items=(--cpus --disk-size --key --memory --hostname --port
+                --config --version)
             if [[ ${prev} == ${cmd} ]]; then
                 if [[ ${cmd} = "rebuild" ]]; then
                     _vms_comp vms
@@ -148,9 +148,13 @@ _boxpy() {
                 case "${prev}" in
                     --config)
                         COMPREPLY=( $(compgen -f -- ${cur}) )
+                        compopt -o plusdirs
                         ;;
                     --key)
                         _ssh_identityfile
+                        ;;
+                    --*)
+                        COMPREPLY=( )
                         ;;
                 esac
             fi
