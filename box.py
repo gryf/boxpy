@@ -134,7 +134,7 @@ _boxpy() {
             ;;
         create|rebuild)
             items=(--cpus --disk-size --key --memory --hostname
-                --port --cloud-config --version)
+                --port --config --version)
             if [[ ${prev} == ${cmd} ]]; then
                 if [[ ${cmd} = "rebuild" ]]; then
                     _vms_comp vms
@@ -146,7 +146,7 @@ _boxpy() {
                 COMPREPLY=( $(compgen -W "$result" -- ${cur}) )
 
                 case "${prev}" in
-                    --cloud-config)
+                    --config)
                         COMPREPLY=( $(compgen -f -- ${cur}) )
                         ;;
                     --key)
@@ -216,8 +216,8 @@ class BoxSysCommandError(BoxError):
 
 
 class Config:
-    ATTRS = ('cpus', 'cloud_config', 'disk_size', 'hostname', 'key',
-             'memory', 'name', 'port', 'version')
+    ATTRS = ('cpus', 'config', 'disk_size', 'hostname', 'key', 'memory',
+             'name', 'port', 'version')
 
     def __init__(self, args, vbox=None):
         self.advanced = None
@@ -754,8 +754,8 @@ def main():
                                    'drive and run')
     create.set_defaults(func=vmcreate)
     create.add_argument('name', help='name of the VM')
-    create.add_argument('-c', '--cpus', type=int, help="amount of CPUs to be "
-                        "configured. Default 1.")
+    create.add_argument('-c', '--config',
+                        help="Alternative user-data template filepath")
     create.add_argument('-d', '--disk-size', help="disk size to be expanded "
                         "to. By default to 10GB")
     create.add_argument('-k', '--key', help="SSH key to be add to the config "
@@ -766,8 +766,8 @@ def main():
                         help="VM hostname. Default same as vm name")
     create.add_argument('-p', '--port', help="set ssh port for VM, default "
                         "2222")
-    create.add_argument('-u', '--cloud-config',
-                        help="Alternative user-data template filepath")
+    create.add_argument('-u', '--cpus', type=int, help="amount of CPUs to be "
+                        "configured. Default 1.")
     create.add_argument('-v', '--version', help=f"Ubuntu server version. "
                         f"Default {UBUNTU_VERSION}")
 
@@ -787,8 +787,8 @@ def main():
                                     'besides vm name are optional, and their '
                                     'values will be taken from vm definition.')
     rebuild.add_argument('name', help='name or UUID of the VM')
-    rebuild.add_argument('-c', '--cpus', type=int,
-                         help='amount of CPUs to be configured')
+    rebuild.add_argument('-c', '--config',
+                         help="Alternative user-data template filepath")
     rebuild.add_argument('-d', '--disk-size',
                          help='disk size to be expanded to')
     rebuild.add_argument('-k', '--key',
@@ -797,8 +797,8 @@ def main():
                          'Megabytes')
     rebuild.add_argument('-n', '--hostname', help="set VM hostname")
     rebuild.add_argument('-p', '--port', help="set ssh port for VM")
-    rebuild.add_argument('-u', '--cloud-config',
-                         help="Alternative user-data template filepath")
+    rebuild.add_argument('-u', '--cpus', type=int,
+                         help='amount of CPUs to be configured')
     rebuild.add_argument('-v', '--version', help='Ubuntu server version')
     rebuild.set_defaults(func=vmrebuild)
 
