@@ -285,10 +285,14 @@ class Config:
         conf = yaml.safe_load(USER_DATA)
 
         # read user custom cloud config (if present) and update config dict
-        if self.user_data and os.path.exists(self.user_data):
-            with open(self.user_data) as fobj:
-                custom_conf = yaml.safe_load(fobj)
-                conf = self._update(conf, custom_conf)
+        if self.user_data:
+            if os.path.exists(self.user_data):
+                with open(self.user_data) as fobj:
+                    custom_conf = yaml.safe_load(fobj)
+                    conf = self._update(conf, custom_conf)
+            else:
+                print(f"WARNING: Provided user_data: {self.user_data} doesn't"
+                      " exists.")
 
         # update the attributes with data from read user cloud config
         for key, val in conf.get('boxpy_data', {}).items():
