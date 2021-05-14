@@ -243,7 +243,10 @@ class Config:
             setattr(self, attr, vm_info[attr])
 
         # next, grab the cloud config file
-        self.user_data = args.cloud_config or vm_info.get('user_data')
+        if args.config:
+            self.user_data = os.path.abspath(args.config)
+        else:
+            self.user_data = vm_info.get('user_data')
 
         # combine it with the defaults, set attributes by boxpy_data
         # definition, if found
