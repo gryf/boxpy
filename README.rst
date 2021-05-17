@@ -20,7 +20,9 @@ Requirements
 ------------
 
 - Python 3.x
+
   - `pyyaml`_
+
 - Virtualbox (obviously)
 - ``mkisofs`` or ``genisoimage`` command for generating iso image
 - ``wget`` command for fetching images
@@ -55,9 +57,7 @@ or simply link it somewhere in the path:
    $ chmod +x ~/bin/boxpy
 
 and now you can issue some command. There are four command for simple managing
-VMs, maybe some other will be available in the future. Who knows. For
-virtualenv it's a little more complicated, so using pyyaml from package
-repository is preferred.
+VMs, maybe some other will be available in the future. Who knows.
 
 For your convenience there is a bash completion for each command, so you can
 use it ad-hoc, or place on your ``.bashrc`` or whatever:
