@@ -545,7 +545,7 @@ class Image:
         self.version = version
         self.arch = arch
         self.vbox = vbox
-        self._tmp = tempfile.mkdtemp()
+        self._tmp = tempfile.mkdtemp(prefix='boxpy_')
         self._img = f"ubuntu-{self.version}-server-cloudimg-{self.arch}.img"
 
     def convert_to_vdi(self, disk_img, size):
