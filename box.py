@@ -305,24 +305,26 @@ class Config:
             setattr(self, key, str(val))
 
         # check if there are files to be written
-        if conf.get('boxpy_data', {}).get('write_files'):
-            for file_data in conf['boxpy_data']['write_files']:
+        if conf.get('write_files'):
+            new_list = []
+            for file_data in conf['write_files']:
                 fname = file_data.get('filename')
                 if not fname:
-                    print("WARNING: one of the entries in boxpy.write_files "
-                          "doesn't provide a filename.")
-                else:
-                    fname = os.path.expanduser(os.path.expandvars(fname))
-                    if not os.path.exists(fname):
-                        print(f"WARNING: file '{file_data['filename']}' "
-                              f"doesn't exists.")
-                    else:
-                        with open(fname) as fobj:
-                            file_data['content'] = fobj.read()
-                        del file_data['filename']
-                        if 'write_files' not in conf:
-                            conf['write_files'] = []
-                        conf['write_files'].append(file_data)
+                    new_list.append(file_data)
+                    continue
+
+                fname = os.path.expanduser(os.path.expandvars(fname))
+                if not os.path.exists(fname):
+                    print(f"WARNING: file '{file_data['filename']}' doesn't "
+                          f"exists.")
+                    continue
+
+                with open(fname) as fobj:
+                    file_data['content'] = fobj.read()
+                del file_data['filename']
+                new_list.append(file_data)
+
+            conf['write_files'] = new_list
 
         # remove boxpy_data since it will be not needed on the guest side
         if conf.get('boxpy_data'):
