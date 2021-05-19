@@ -267,10 +267,56 @@ class Config:
 
         # finally, figure out host name
         self.hostname = self.hostname or self._normalize_name()
+        self._set_ssh_key_path()
 
-    def get_cloud_config_tpl(self):
-        conf = "#cloud-config\n" + yaml.safe_dump(self._conf)
-        return string.Template(conf)
+    def get_cloud_config(self):
+        # 1. process template
+        tpl = string.Template(yaml.safe_dump(self._conf))
+
+        with open(self.ssh_key_path) as fobj:
+            ssh_pub_key = fobj.read().strip()
+
+        conf = yaml.safe_load(tpl.substitute({'ssh_key': ssh_pub_key}))
+
+        # 2. process 'write_files' items, so that things with '$' will not go
+        # in a way for templates.
+        if conf.get('write_files'):
+            new_list = []
+            for file_data in conf['write_files']:
+                fname = file_data.get('filename')
+                if not fname:
+                    new_list.append(file_data)
+                    continue
+
+                fname = os.path.expanduser(os.path.expandvars(fname))
+                if not os.path.exists(fname):
+                    print(f"WARNING: file '{file_data['filename']}' doesn't "
+                          f"exists.")
+                    continue
+
+                with open(fname) as fobj:
+                    file_data['content'] = fobj.read()
+                del file_data['filename']
+                new_list.append(file_data)
+
+            conf['write_files'] = new_list
+
+        # 3. finally dump it again.
+        return "#cloud-config\n" + yaml.safe_dump(conf)
+
+    def _set_ssh_key_path(self):
+        self.ssh_key_path = self.key
+
+        if not self.ssh_key_path.endswith('.pub'):
+            self.ssh_key_path += '.pub'
+        if not os.path.exists(self.ssh_key_path):
+            self.ssh_key_path = os.path.join(os.path
+                                             .expanduser(self.ssh_key_path))
+        if not os.path.exists(self.ssh_key_path):
+            self.ssh_key_path = os.path.join(os.path.expanduser("~/.ssh"),
+                                             self.ssh_key_path)
+        if not os.path.exists(self.ssh_key_path):
+            raise BoxNotFound(f'Cannot find ssh public key: {conf.key}')
 
     def _set_defaults(self):
         conf = yaml.safe_load(USER_DATA)
@@ -303,28 +349,6 @@ class Config:
             if not val:
                 continue
             setattr(self, key, str(val))
-
-        # check if there are files to be written
-        if conf.get('write_files'):
-            new_list = []
-            for file_data in conf['write_files']:
-                fname = file_data.get('filename')
-                if not fname:
-                    new_list.append(file_data)
-                    continue
-
-                fname = os.path.expanduser(os.path.expandvars(fname))
-                if not os.path.exists(fname):
-                    print(f"WARNING: file '{file_data['filename']}' doesn't "
-                          f"exists.")
-                    continue
-
-                with open(fname) as fobj:
-                    file_data['content'] = fobj.read()
-                del file_data['filename']
-                new_list.append(file_data)
-
-            conf['write_files'] = new_list
 
         # remove boxpy_data since it will be not needed on the guest side
         if conf.get('boxpy_data'):
@@ -626,20 +650,7 @@ class IsoImage:
     def __init__(self, conf):
         self._tmp = tempfile.mkdtemp()
         self.hostname = conf.hostname
-        self.ssh_key_path = conf.key
-
-        if not self.ssh_key_path.endswith('.pub'):
-            self.ssh_key_path += '.pub'
-        if not os.path.exists(self.ssh_key_path):
-            self.ssh_key_path = os.path.join(os.path
-                                             .expanduser(self.ssh_key_path))
-        if not os.path.exists(self.ssh_key_path):
-            self.ssh_key_path = os.path.join(os.path.expanduser("~/.ssh"),
-                                             self.ssh_key_path)
-        if not os.path.exists(self.ssh_key_path):
-            raise BoxNotFound(f'Cannot find ssh public key: {conf.key}')
-
-        self.ud_tpl = conf.get_cloud_config_tpl()
+        self._cloud_conf = conf.get_cloud_config()
 
     def get_generated_image(self):
         self._create_cloud_image()
@@ -656,11 +667,8 @@ class IsoImage:
                                     'vmhostname': self.hostname}))
 
         # user-data
-        with open(self.ssh_key_path) as fobj:
-            ssh_pub_key = fobj.read().strip()
-
         with open(os.path.join(self._tmp, 'user-data'), 'w') as fobj:
-            fobj.write(self.ud_tpl.substitute({'ssh_key': ssh_pub_key}))
+            fobj.write(self._cloud_conf)
 
         mkiso = 'mkisofs' if shutil.which('mkisofs') else 'genisoimage'
 
@@ -736,7 +744,7 @@ def vmcreate(args, conf=None):
     _cleanup(vbox, iso, image, path_to_iso)
     vbox.poweron()
     print('You can access your VM by issuing:')
-    print(f'ssh -p {conf.port} -i {iso.ssh_key_path[:-4]} ubuntu@localhost')
+    print(f'ssh -p {conf.port} -i {conf.ssh_key_path[:-4]} ubuntu@localhost')
     return 0
 
 

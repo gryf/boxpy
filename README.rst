@@ -101,6 +101,13 @@ It is really simple, and use ``string.Template`` for exchanging token
 log in into the VM using that key. Section ``power_state`` is used internally
 for making sure the cloud-init finish up and the VM will be started again.
 
+Note, that you need to be extra careful regarding ``$`` sign. As explained
+above ``$ssh_key`` will be used as a "variable" for the template to substitute
+with the real value of public key. Every ``$`` sign, especially in
+``write_files.contents``, should be escaped with another dollar, so the ``$``
+will become a ``$$``. Perhaps I'll change the approach for writing ssh key,
+since that's a little bit annoying.
+
 What is more interesting is the fact, that you could use whatever cloud-init
 accepts, and a special section, for keeping configuration, so that you don't
 need to provide all the option every time you boot up similar VM. For example:
