@@ -17,6 +17,7 @@ import yaml
 
 CACHE_DIR = os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
 CLOUD_IMAGE = "ci.iso"
+FEDORA_RELEASE_MAP = {'32': '1.6', '33': '1.2', '34': '1.2'}
 META_DATA_TPL = string.Template('''\
 instance-id: $instance_id
 local-hostname: $vmhostname
@@ -42,7 +43,6 @@ boxpy_data:
   key: ~/.ssh/id_rsa
   memory: 2048
   port: 2222
-  version: 20.04
 '''
 COMPLETIONS = {'bash': '''\
 _boxpy() {
@@ -670,39 +670,77 @@ class Ubuntu(Image):
             print(f'Downloaded image {self._img_fname}')
 
 
-    def _convert_to_raw(self):
-        img_path = os.path.join(CACHE_DIR, self._img)
-        raw_path = os.path.join(self._tmp, self._img + ".raw")
-        if subprocess.call(['qemu-img', 'convert', '-O', 'raw',
-                            img_path, raw_path]) != 0:
-            raise BoxConvertionError(f'Cannot convert image {self._img} to '
-                                     'RAW.')
+class Fedora(Image):
+    URL = ("https://download.fedoraproject.org/pub/fedora/linux/releases/%s/"
+           "Cloud/%s/images/%s")
+    IMG = "Fedora-Cloud-Base-%s-%s.%s.qcow2"
+    CHKS = "Fedora-Cloud-%s-%s-%s-CHECKSUM"
+
+    def __init__(self, vbox, version, arch, release):
+        super().__init__(vbox, version, arch, release)
+        self._img_fname = self.IMG % (version, release, arch)
+        self._img_url = self.URL % (version, arch, self._img_fname)
+        self._checksum_file = self.CHKS % (version, release, arch)
+        self._checksum_url = self.URL % (version, arch, self._checksum_file)
+
+    def _checksum(self):
+        """
+        Get and check checkusm for downloaded image. Return True if the
+        checksum is correct, False otherwise.
+        """
+        if not os.path.exists(os.path.join(CACHE_DIR, self._img_fname)):
+            return False
+
+        expected_sum = None
+        # TODO: make the verbosity switch be dependent from verbosity of the
+        # script.
+        fname = os.path.join(self._tmp, self._checksum_file)
+        subprocess.call(['wget', self._checksum_url, '-q', '-O', fname])
+
+        with open(fname) as fobj:
+            for line in fobj.readlines():
+                if line.startswith('#'):
+                    continue
+                if self._img_fname in line:
+                    expected_sum = line.split('=')[1].strip()
+                    break
+
+        if not expected_sum:
+            raise BoxError('Cannot find provided cloud image')
+
+        if os.path.exists(os.path.join(CACHE_DIR, self._img_fname)):
+            cmd = 'sha256sum ' + os.path.join(CACHE_DIR, self._img_fname)
+            calulated_sum = subprocess.getoutput(cmd).split(' ')[0]
+            return calulated_sum == expected_sum
+
+        return False
 
     def _download_image(self):
         if self._checksum():
-            print(f'Image already downloaded: {self._img}')
+            print(f'Image already downloaded: {self._img_fname}')
             return
 
-        url = "https://cloud-images.ubuntu.com/releases/"
-        url += f"{self.version}/release/"
-        url += self._img
-        print(f'Downloading image {self._img}')
-        subprocess.call(['wget', '-q', url, '-O', os.path.join(CACHE_DIR,
-                                                               self._img)])
+        fname = os.path.join(CACHE_DIR, self._img_fname)
+        subprocess.call(['wget', '-q', self._img_url, '-O', fname])
 
         if not self._checksum():
             # TODO: make some retry mechanism?
             raise BoxSysCommandError('Checksum for downloaded image differ '
                                      'from expected.')
         else:
-            print(f'Downloaded image {self._img}')
+            print(f'Downloaded image {self._img_fname}')
 
 
 DISTROS = {'ubuntu': {'username': 'ubuntu',
                       'realname': 'ubuntu',
                       'img_class': Ubuntu,
                       'amd64': 'amd64',
-                      'default_version': '20.04'}}
+                      'default_version': '20.04'},
+           'fedora': {'username': 'fedora',
+                      'realname': 'fedora',
+                      'img_class': Fedora,
+                      'amd64': 'x86_64',
+                      'default_version': '34'}}
 
 
 def get_image(vbox, version, image='ubuntu', arch='amd64'):
