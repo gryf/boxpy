@@ -21,7 +21,6 @@ META_DATA_TPL = string.Template('''\
 instance-id: $instance_id
 local-hostname: $vmhostname
 ''')
-UBUNTU_VERSION = '20.04'
 USER_DATA = '''\
 #cloud-config
 users:
@@ -133,8 +132,8 @@ _boxpy() {
             fi
             ;;
         create|rebuild)
-            items=(--cpus --disk-size --key --memory --hostname --port
-                --config --version)
+            items=(--cpus --disk-size --distro --key --memory --hostname
+                --port --config --version)
             if [[ ${prev} == ${cmd} ]]; then
                 if [[ ${cmd} = "rebuild" ]]; then
                     _vms_comp vms
@@ -152,6 +151,9 @@ _boxpy() {
                         ;;
                     --key)
                         _ssh_identityfile
+                        ;;
+                    --distro)
+                        COMPREPLY=( $(compgen -W "ubuntu" -- ${cur}) )
                         ;;
                     --*)
                         COMPREPLY=( )
@@ -175,6 +177,7 @@ _boxpy() {
 }
 complete -o default -F _boxpy boxpy
 '''}
+
 
 def convert_to_mega(size):
     """
@@ -224,11 +227,12 @@ class BoxSysCommandError(BoxError):
 
 
 class Config:
-    ATTRS = ('cpus', 'config', 'disk_size', 'hostname', 'key', 'memory',
-             'name', 'port', 'version')
+    ATTRS = ('cpus', 'config', 'disk_size', 'distro', 'hostname', 'key',
+             'memory', 'name', 'port', 'version')
 
     def __init__(self, args, vbox=None):
         self.advanced = None
+        self.distro = args.distro
         self.cpus = None
         self.disk_size = None
         self.hostname = None
@@ -258,7 +262,7 @@ class Config:
 
         # combine it with the defaults, set attributes by boxpy_data
         # definition, if found
-        self._combine_cc(vbox)
+        self._combine_cc()
 
         # than, override all of the attributes with provided arguments from
         # the command line
@@ -268,6 +272,9 @@ class Config:
             if not val:
                 continue
             setattr(self, attr, str(val))
+
+        if not self.version:
+            self.version = DISTROS[self.distro]['default_version']
 
         # finally, figure out host name
         self.hostname = self.hostname or self._normalize_name()
@@ -338,7 +345,7 @@ class Config:
         name = name.decode('utf-8')
         return ''.join(x for x in name if x.isalnum() or x == '-')
 
-    def _combine_cc(self, vbox):
+    def _combine_cc(self):
         conf = yaml.safe_load(USER_DATA)
 
         # read user custom cloud config (if present) and update config dict
@@ -574,56 +581,94 @@ class VBoxManage:
 
 
 class Image:
-    def __init__(self, vbox, version, arch='amd64'):
-        self.version = version
-        self.arch = arch
+    URL = ""
+    IMG = ""
+
+    def __init__(self, vbox, version, arch, release):
         self.vbox = vbox
         self._tmp = tempfile.mkdtemp(prefix='boxpy_')
-        self._img = f"ubuntu-{self.version}-server-cloudimg-{self.arch}.img"
+        self._img_fname = None
 
     def convert_to_vdi(self, disk_img, size):
         self._download_image()
         self._convert_to_raw()
-        raw_path = os.path.join(self._tmp, self._img + ".raw")
+        raw_path = os.path.join(self._tmp, self._img_fname + ".raw")
         vdi_path = os.path.join(self._tmp, disk_img)
         self.vbox.convertfromraw(raw_path, vdi_path)
         return self.vbox.move_and_resize_image(vdi_path, disk_img, size)
+
+    def cleanup(self):
+        subprocess.call(['rm', '-fr', self._tmp])
+
+    def _convert_to_raw(self):
+        img_path = os.path.join(CACHE_DIR, self._img_fname)
+        raw_path = os.path.join(self._tmp, self._img_fname + ".raw")
+        if subprocess.call(['qemu-img', 'convert', '-O', 'raw',
+                            img_path, raw_path]) != 0:
+            raise BoxConvertionError(f'Cannot convert image {self._img_fname} '
+                                     'to RAW.')
+
+    def _download_image(self):
+        raise NotImplementedError()
+
+
+class Ubuntu(Image):
+    URL = "https://cloud-images.ubuntu.com/releases/%s/release/%s"
+    IMG = "ubuntu-%s-server-cloudimg-%s.img"
+
+    def __init__(self, vbox, version, arch, release):
+        super().__init__(vbox, version, arch, release)
+        self._img_fname = self.IMG % (version, arch)
+        self._img_url = self.URL % (version, self._img_fname)
+        self._checksum_file = 'SHA256SUMS'
+        self._checksum_url = self.URL % (version, self._checksum_file)
 
     def _checksum(self):
         """
         Get and check checkusm for downloaded image. Return True if the
         checksum is correct, False otherwise.
         """
-        if not os.path.exists(os.path.join(CACHE_DIR, self._img)):
+        if not os.path.exists(os.path.join(CACHE_DIR, self._img_fname)):
             return False
 
         expected_sum = None
-        fname = 'SHA256SUMS'
-        url = "https://cloud-images.ubuntu.com/releases/"
-        url += f"{self.version}/release/{fname}"
+        fname = os.path.join(self._tmp, self._checksum_file)
         # TODO: make the verbosity switch be dependent from verbosity of the
         # script.
-        subprocess.call(['wget', url, '-q', '-O',
-                         os.path.join(self._tmp, fname)])
+        subprocess.call(['wget', self._checksum_url, '-q', '-O', fname])
 
-        with open(os.path.join(self._tmp, fname)) as fobj:
+        with open(fname) as fobj:
             for line in fobj.readlines():
-                if self._img in line:
+                if self._img_fname in line:
                     expected_sum = line.split(' ')[0]
                     break
 
         if not expected_sum:
             raise BoxError('Cannot find provided cloud image')
 
-        if os.path.exists(os.path.join(CACHE_DIR, self._img)):
-            cmd = 'sha256sum ' + os.path.join(CACHE_DIR, self._img)
+        if os.path.exists(os.path.join(CACHE_DIR, self._img_fname)):
+            cmd = 'sha256sum ' + os.path.join(CACHE_DIR, self._img_fname)
             calulated_sum = subprocess.getoutput(cmd).split(' ')[0]
             return calulated_sum == expected_sum
 
         return False
 
-    def cleanup(self):
-        subprocess.call(['rm', '-fr', self._tmp])
+    def _download_image(self):
+        if self._checksum():
+            print(f'Image already downloaded: {self._img_fname}')
+            return
+
+        fname = os.path.join(CACHE_DIR, self._img_fname)
+        print(f'Downloading image {self._img_fname}')
+        subprocess.call(['wget', '-q', self._img_url, '-O', fname])
+
+        if not self._checksum():
+            # TODO: make some retry mechanism?
+            raise BoxSysCommandError('Checksum for downloaded image differ '
+                                     'from expected.')
+        else:
+            print(f'Downloaded image {self._img_fname}')
+
 
     def _convert_to_raw(self):
         img_path = os.path.join(CACHE_DIR, self._img)
@@ -654,7 +699,18 @@ class Image:
 
 
 DISTROS = {'ubuntu': {'username': 'ubuntu',
-                      'realname': 'ubuntu'}}
+                      'realname': 'ubuntu',
+                      'img_class': Ubuntu,
+                      'amd64': 'amd64',
+                      'default_version': '20.04'}}
+
+
+def get_image(vbox, version, image='ubuntu', arch='amd64'):
+    release = None
+    if image == 'fedora':
+        release = FEDORA_RELEASE_MAP[version]
+    return DISTROS[image]['img_class'](vbox, version, DISTROS[image]['amd64'],
+                                       release)
 
 
 class IsoImage:
@@ -712,7 +768,7 @@ def vmcreate(args, conf=None):
     if conf.user_data:
         vbox.setextradata('user_data', conf.user_data)
 
-    image = Image(vbox, conf.version)
+    image = get_image(vbox, conf.version, image=args.distro)
     path_to_disk = image.convert_to_vdi(conf.name + '.vdi', conf.disk_size)
 
     iso = IsoImage(conf)
@@ -760,7 +816,8 @@ def vmcreate(args, conf=None):
     _cleanup(vbox, iso, image, path_to_iso)
     vbox.poweron()
     print('You can access your VM by issuing:')
-    print(f'ssh -p {conf.port} -i {conf.ssh_key_path[:-4]} ubuntu@localhost')
+    print(f'ssh -p {conf.port} -i {conf.ssh_key_path[:-4]} '
+          f'{DISTROS[args.distro]["username"]}@localhost')
     return 0
 
 
@@ -813,9 +870,7 @@ def main():
     create.add_argument('name', help='name of the VM')
     create.add_argument('-c', '--config',
                         help="Alternative user-data template filepath")
-    create.add_argument('-d', '--disk-size', help="disk size to be expanded "
-                        "to. By default to 10GB")
-    create.add_argument('-i', '--distro', help="Image name. 'ubuntu' is "
+    create.add_argument('-d', '--distro', help="Image name. 'ubuntu' is "
                         "default")
     create.add_argument('-k', '--key', help="SSH key to be add to the config "
                         "drive. Default ~/.ssh/id_rsa")
@@ -825,10 +880,12 @@ def main():
                         help="VM hostname. Default same as vm name")
     create.add_argument('-p', '--port', help="set ssh port for VM, default "
                         "2222")
+    create.add_argument('-s', '--disk-size', help="disk size to be expanded "
+                        "to. By default to 10GB")
     create.add_argument('-u', '--cpus', type=int, help="amount of CPUs to be "
                         "configured. Default 1.")
     create.add_argument('-v', '--version', help=f"Ubuntu server version. "
-                        f"Default {UBUNTU_VERSION}")
+                        f"Default {DISTROS['ubuntu']['default_version']}")
 
     destroy = subparsers.add_parser('destroy', help='destroy VM')
     destroy.add_argument('name', help='name or UUID of the VM')
@@ -848,15 +905,15 @@ def main():
     rebuild.add_argument('name', help='name or UUID of the VM')
     rebuild.add_argument('-c', '--config',
                          help="Alternative user-data template filepath")
-    rebuild.add_argument('-d', '--disk-size',
-                         help='disk size to be expanded to')
-    rebuild.add_argument('-i', '--distro', help="Image name.")
+    rebuild.add_argument('-d', '--distro', help="Image name.")
     rebuild.add_argument('-k', '--key',
                          help='SSH key to be add to the config drive')
     rebuild.add_argument('-m', '--memory', help='amount of memory in '
                          'Megabytes')
     rebuild.add_argument('-n', '--hostname', help="set VM hostname")
     rebuild.add_argument('-p', '--port', help="set ssh port for VM")
+    rebuild.add_argument('-s', '--disk-size',
+                         help='disk size to be expanded to')
     rebuild.add_argument('-u', '--cpus', type=int,
                          help='amount of CPUs to be configured')
     rebuild.add_argument('-v', '--version', help='Ubuntu server version')
