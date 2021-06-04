@@ -26,11 +26,11 @@ USER_DATA = '''\
 #cloud-config
 users:
   - default
-  - name: ubuntu
+  - name: ${username}
     ssh_authorized_keys:
       - $ssh_key
     chpasswd: { expire: False }
-    gecos: ubuntu
+    gecos: ${realname}
     sudo: ALL=(ALL) NOPASSWD:ALL
     groups: users, admin
 power_state:
@@ -280,7 +280,10 @@ class Config:
         with open(self.ssh_key_path) as fobj:
             ssh_pub_key = fobj.read().strip()
 
-        conf = yaml.safe_load(tpl.substitute({'ssh_key': ssh_pub_key}))
+        conf = yaml.safe_load(tpl.substitute(
+            {'ssh_key': ssh_pub_key,
+             'username': DISTROS[self.distro]['username'],
+             'realname': DISTROS[self.distro]['realname']}))
 
         # 2. process 'write_files' items, so that things with '$' will not go
         # in a way for templates.
@@ -650,6 +653,10 @@ class Image:
             print(f'Downloaded image {self._img}')
 
 
+DISTROS = {'ubuntu': {'username': 'ubuntu',
+                      'realname': 'ubuntu'}}
+
+
 class IsoImage:
     def __init__(self, conf):
         self._tmp = tempfile.mkdtemp()
@@ -686,6 +693,10 @@ class IsoImage:
 
 
 def vmcreate(args, conf=None):
+
+    if not args.distro:
+        args.distro = 'ubuntu'
+
     if not conf:
         conf = Config(args)
     vbox = VBoxManage(conf.name)
@@ -694,6 +705,7 @@ def vmcreate(args, conf=None):
     vbox.create_controller('IDE', 'ide')
     vbox.create_controller('SATA', 'sata')
 
+    vbox.setextradata('distro', conf.distro)
     vbox.setextradata('key', conf.key)
     vbox.setextradata('hostname', conf.hostname)
     vbox.setextradata('version', conf.version)
@@ -803,6 +815,8 @@ def main():
                         help="Alternative user-data template filepath")
     create.add_argument('-d', '--disk-size', help="disk size to be expanded "
                         "to. By default to 10GB")
+    create.add_argument('-i', '--distro', help="Image name. 'ubuntu' is "
+                        "default")
     create.add_argument('-k', '--key', help="SSH key to be add to the config "
                         "drive. Default ~/.ssh/id_rsa")
     create.add_argument('-m', '--memory', help="amount of memory in "
@@ -836,6 +850,7 @@ def main():
                          help="Alternative user-data template filepath")
     rebuild.add_argument('-d', '--disk-size',
                          help='disk size to be expanded to')
+    rebuild.add_argument('-i', '--distro', help="Image name.")
     rebuild.add_argument('-k', '--key',
                          help='SSH key to be add to the config drive')
     rebuild.add_argument('-m', '--memory', help='amount of memory in '
