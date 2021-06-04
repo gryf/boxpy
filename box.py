@@ -183,20 +183,24 @@ def convert_to_mega(size):
     readable suffix, like M or G. Case insensitive.
     """
 
+    result = None
+
     if size.isnumeric():
-        return str(size)
+        result = str(size)
 
     if size.lower().endswith('m') and size[:-1].isnumeric():
-        return str(size[:-1])
+        result = str(size[:-1])
 
     if size.lower().endswith('g') and size[:-1].isnumeric():
-        return str(int(size[:-1]) * 1024)
+        result = str(int(size[:-1]) * 1024)
 
     if size.lower().endswith('mb') and size[:-2].isnumeric():
-        return str(size[:-2])
+        result = str(size[:-2])
 
     if size.lower().endswith('gb') and size[:-2].isnumeric():
-        return str(int(size[:-2]) * 1024)
+        result = str(int(size[:-2]) * 1024)
+
+    return result
 
 
 class BoxError(Exception):
@@ -316,7 +320,7 @@ class Config:
             self.ssh_key_path = os.path.join(os.path.expanduser("~/.ssh"),
                                              self.ssh_key_path)
         if not os.path.exists(self.ssh_key_path):
-            raise BoxNotFound(f'Cannot find ssh public key: {conf.key}')
+            raise BoxNotFound(f'Cannot find ssh public key: {self.key}')
 
     def _set_defaults(self):
         conf = yaml.safe_load(USER_DATA)
@@ -416,8 +420,8 @@ class VBoxManage:
 
                 if line.isnumeric():
                     return line
-                else:
-                    return line.split(' ')[0].strip()
+
+                return line.split(' ')[0].strip()
 
     def get_vm_info(self):
         try:
