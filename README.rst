@@ -2,18 +2,15 @@
 box.py
 ======
 
-Box.py is a simple automation tool meant to run Ubuntu cloud image on top of
-VirtualBox.
+Box.py is a simple automation tool meant to run Ubuntu or Fedora cloud images
+on top of VirtualBox.
 
-What it does is simply download official cloud image for Ubuntu server, set up
-VM, tweak it up and do the initial pre-configuration using generated config
-drive.
+What it does is simply download official cloud image, set up VM, tweak it up
+and do the initial pre-configuration using generated config drive.
 
 I've wrote this little tool just to not click myself to death using web browser
 for downloading cloud images, and going through VirtualBox GUI (or figuring out
 weird named options for ``vboxmanage`` ;P)
-
-Perhaps other distros would be supported in the future.
 
 
 Requirements
@@ -107,6 +104,23 @@ with the real value of public key. Every ``$`` sign, especially in
 ``write_files.contents``, should be escaped with another dollar, so the ``$``
 will become a ``$$``. Perhaps I'll change the approach for writing ssh key,
 since that's a little bit annoying.
+
+For that reason, a little improvement has been done, so now its possible to
+pass filenames to the custom config, instead of filling up
+``write_files.contents``:
+
+.. code:: yaml
+
+   write_files:
+     - path: /opt/somefile.txt
+       permissions: '0644'
+       filename: /path/to/local/file.txt
+
+during processing this file, boxpy will look for ``filename`` key in the yaml
+file for the ``write_files`` sections, and it will remove that key read the
+file and put its contents under ``content`` key. What is more important, that
+will be done after template processing, so that there will be no interference
+for possible ``$`` characters.
 
 What is more interesting is the fact, that you could use whatever cloud-init
 accepts, and a special section, for keeping configuration, so that you don't
