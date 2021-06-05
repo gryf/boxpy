@@ -578,21 +578,38 @@ class VBoxManage:
                             f'--{nic}', kind]) != 0:
             raise BoxVBoxFailure(f'Cannot modify VM "{self.name_or_uuid}".')
 
+    def is_port_in_use(self, port):
+        used_ports = self._get_defined_ports()
+        for vmname, vmport in used_ports.items():
+            if vmport == port:
+                return vmname
+        return False
+
     def _find_unused_port(self):
+        used_ports = self._get_defined_ports()
+
+        while True:
+            port = random.randint(2000, 2999)
+            if port not in used_ports.values():
+                self.vm_info['port'] = port
+                return port
+
+    def _get_defined_ports(self):
         self.get_vm_info()
         try:
             out = subprocess.check_output(['vboxmanage', 'list', 'vms'],
                                           encoding=sys.getdefaultencoding(),
                                           stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError:
-            return 0
+            return {}
 
-        used_ports = []
+        used_ports = {}
         for line in out.split('\n'):
             if not line:
                 continue
+            vm_name = line.split('"')[1]
             vm_uuid = line.split('{')[1][:-1]
-            if self.vm_info['uuid'] == vm_uuid:
+            if self.vm_info.get('uuid') and self.vm_info['uuid'] == vm_uuid:
                 continue
 
             try:
@@ -611,14 +628,9 @@ class VBoxManage:
             gebtn = dom.getElementsByTagName
 
             if len(gebtn('Forwarding')):
-                used_ports.append(gebtn('Forwarding')[0]
-                                  .getAttribute('hostport'))
-
-        while True:
-            port = random.randint(2000, 2999)
-            if port not in used_ports:
-                self.vm_info['port'] = port
-                return port
+                used_ports[vm_name] = (gebtn('Forwarding')[0]
+                                       .getAttribute('hostport'))
+        return used_ports
 
     def _get_vm_config(self):
         if self.vm_info.get('config_file'):
@@ -843,9 +855,17 @@ def vmcreate(args, conf=None):
 
     if not conf:
         conf = Config(args)
+
     vbox = VBoxManage(conf.name)
+    if conf.port:
+        used = vbox.is_port_in_use(conf.port)
+        if used:
+            print(f'Error: Port {conf.port} is in use by "{used}" VM.')
+            return 11
+
     if not vbox.create(conf.cpus, conf.memory, conf.port):
         return 10
+
     vbox.create_controller('IDE', 'ide')
     vbox.create_controller('SATA', 'sata')
 
