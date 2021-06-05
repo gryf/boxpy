@@ -40,7 +40,7 @@ your operating system, or by using virtualenv for Python requirements, i.e.:
    $ . .venv/bin/activate
    (.venv) $ pip install requirements.txt
 
-than you can issue:
+then you can issue:
 
 .. code:: shell-session
 
@@ -53,8 +53,33 @@ or simply link it somewhere in the path:
    $ ln -s /path/to/box.py ~/bin/boxpy
    $ chmod +x ~/bin/boxpy
 
-and now you can issue some command. There are four command for simple managing
-VMs, maybe some other will be available in the future. Who knows.
+and now you can issue some command. For example, to spin up a VM with Ubuntu
+18.04 with one CPU, 2GB of memory and 10GB of disk:
+
+.. code:: shell-session
+
+   $ boxpy create --version 18.04 myvm
+
+note, that Ubuntu is default distribution you don't need to specify
+``--distro`` nor ``--version`` it will pick up latest LTS version. Now, let's
+recreate it with 20.04:
+
+.. code:: shell-session
+
+   $ boxpy rebuild --version 20.04 myvm
+
+or recreate it with Fedora and add additional CPU:
+
+.. code:: shell-session
+
+   $ boxpy rebuild --distro fedora --version 34 --cpu 2 myvm
+
+now, let's connect to the VM using either ssh command, which is printed out at
+as last ``boxpy`` output line, or simply by using ssh boxpy command:
+
+.. code:: shell-session
+
+   $ boxpy ssh myvm
 
 For your convenience there is a bash completion for each command, so you can
 use it ad-hoc, or place on your ``.bashrc`` or whatever:
@@ -63,14 +88,17 @@ use it ad-hoc, or place on your ``.bashrc`` or whatever:
 
    $ source <(boxpy completion bash)
 
-currently there are four commands available:
+Currently, following commands are available:
 
 - ``list`` - for quickly listing all/running VMs
 - ``destroy`` - that is probably obvious one
-- ``create`` and ``rebuild``
+- ``create`` - create new VM
+- ``rebuild`` - recreate specified VM
+- ``ssh`` - connect to the VM using ssh
+- ``completion`` - as described above
 
-The latter two accepts several options besides required vm name. You can
-examine it by using ``--help``.
+All of the commands have a range of options, and can be examined it by using
+``--help``.
 
 What is more interesting though, is the fact, that you can pass your own
 `cloud-init`_ yaml file, so that VM can be provisioned in easy way.

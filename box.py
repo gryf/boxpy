@@ -119,7 +119,7 @@ _boxpy() {
         fi
     fi
 
-    opts="create destroy rebuild list completion"
+    opts="create destroy rebuild list completion ssh"
     if [[ ${cur} == "-q" || ${cur} == "-v" || ${COMP_CWORD} -eq 1 ]] ; then
         COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
         return 0
@@ -171,6 +171,11 @@ _boxpy() {
             items=(--long --running)
             _get_excluded_items "${items[@]}"
             COMPREPLY=( $(compgen -W "$result" -- ${cur}) )
+            ;;
+        ssh)
+            if [[ ${prev} == ${cmd} ]]; then
+                _vms_comp vms
+            fi
             ;;
     esac
 
@@ -255,7 +260,7 @@ class Config:
             setattr(self, attr, vm_info[attr])
 
         # next, grab the cloud config file
-        if 'config' in args:
+        if 'config' in args and args.config:
             self.user_data = os.path.abspath(args.config)
         else:
             self.user_data = vm_info.get('user_data')
@@ -855,7 +860,7 @@ def vmcreate(args, conf=None):
     vbox.poweron()
     print('You can access your VM by issuing:')
     print(f'ssh -p {conf.port} -i {conf.ssh_key_path[:-4]} '
-          f'{DISTROS[args.distro]["username"]}@localhost')
+          f'{DISTROS[conf.distro]["username"]}@localhost')
     return 0
 
 
@@ -891,6 +896,21 @@ def vmrebuild(args):
 
 def shell_completion(args):
     sys.stdout.write(COMPLETIONS[args.shell])
+    return 0
+
+
+def connect(args):
+    vbox = VBoxManage(args.name)
+    conf = Config(args, vbox)
+    try:
+        subprocess.call(['ssh', '-o', 'StrictHostKeyChecking=no',
+                         '-o', 'UserKnownHostsFile=/dev/null',
+                         '-i', conf.ssh_key_path[:-4],
+                         f'ssh://{DISTROS[conf.distro]["username"]}'
+                         f'@localhost:{conf.port}'])
+    except subprocess.CalledProcessError:
+        return None
+
     return 0
 
 
@@ -962,6 +982,10 @@ def main():
     completion.add_argument('shell', choices=['bash'],
                             help="pick shell to generate completions for")
     completion.set_defaults(func=shell_completion)
+
+    ssh = subparsers.add_parser('ssh', help='Connect to the machine via SSH')
+    ssh.add_argument('name', help='name or UUID of the VM')
+    ssh.set_defaults(func=connect)
 
     args = parser.parse_args()
 
