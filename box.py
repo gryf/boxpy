@@ -3,6 +3,7 @@
 import argparse
 import collections.abc
 import os
+import random
 import shutil
 import string
 import subprocess
@@ -42,7 +43,6 @@ boxpy_data:
   disk_size: 10240
   key: ~/.ssh/id_rsa
   memory: 2048
-  port: 2222
 '''
 COMPLETIONS = {'bash': '''\
 _boxpy() {
@@ -494,7 +494,7 @@ class VBoxManage:
                             '--delete']) != 0:
             raise BoxVBoxFailure(f'Removing VM {self.name_or_uuid} failed')
 
-    def create(self, cpus, memory, port):
+    def create(self, cpus, memory, port=None):
         self.uuid = None
         memory = convert_to_mega(memory)
 
@@ -512,6 +512,9 @@ class VBoxManage:
 
         if not self.uuid:
             raise BoxVBoxFailure(f'Cannot create VM "{self.name_or_uuid}".')
+
+        if not port:
+            port = self._find_unused_port()
 
         if subprocess.call(['vboxmanage', 'modifyvm', self.name_or_uuid,
                             '--memory', str(memory),
@@ -574,6 +577,48 @@ class VBoxManage:
         if subprocess.call(['vboxmanage', 'modifyvm', self.name_or_uuid,
                             f'--{nic}', kind]) != 0:
             raise BoxVBoxFailure(f'Cannot modify VM "{self.name_or_uuid}".')
+
+    def _find_unused_port(self):
+        self.get_vm_info()
+        try:
+            out = subprocess.check_output(['vboxmanage', 'list', 'vms'],
+                                          encoding=sys.getdefaultencoding(),
+                                          stderr=subprocess.DEVNULL)
+        except subprocess.CalledProcessError:
+            return 0
+
+        used_ports = []
+        for line in out.split('\n'):
+            if not line:
+                continue
+            vm_uuid = line.split('{')[1][:-1]
+            if self.vm_info['uuid'] == vm_uuid:
+                continue
+
+            try:
+                info = (subprocess
+                        .check_output(['vboxmanage', 'showvminfo', vm_uuid],
+                                      encoding=sys.getdefaultencoding(),
+                                      stderr=subprocess.DEVNULL))
+            except subprocess.CalledProcessError:
+                continue
+
+            for line in info.split('\n'):
+                if line.startswith('Config file:'):
+                    config = line.split('Config ' 'file:')[1].strip()
+
+            dom = xml.dom.minidom.parse(config)
+            gebtn = dom.getElementsByTagName
+
+            if len(gebtn('Forwarding')):
+                used_ports.append(gebtn('Forwarding')[0]
+                                  .getAttribute('hostport'))
+
+        while True:
+            port = random.randint(2000, 2999)
+            if port not in used_ports:
+                self.vm_info['port'] = port
+                return port
 
     def _get_vm_config(self):
         if self.vm_info.get('config_file'):
@@ -858,6 +903,9 @@ def vmcreate(args, conf=None):
     # dettach ISO image
     _cleanup(vbox, iso, image, path_to_iso)
     vbox.poweron()
+
+    # reread config to update fields
+    conf = Config(args, vbox)
     print('You can access your VM by issuing:')
     print(f'ssh -p {conf.port} -i {conf.ssh_key_path[:-4]} '
           f'{DISTROS[conf.distro]["username"]}@localhost')
@@ -937,7 +985,7 @@ def main():
     create.add_argument('-n', '--hostname',
                         help="VM hostname. Default same as vm name")
     create.add_argument('-p', '--port', help="set ssh port for VM, default "
-                        "2222")
+                        "random port from range 2000-2999")
     create.add_argument('-s', '--disk-size', help="disk size to be expanded "
                         "to. By default to 10GB")
     create.add_argument('-u', '--cpus', type=int, help="amount of CPUs to be "
