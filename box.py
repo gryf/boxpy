@@ -278,6 +278,10 @@ class Config:
                 continue
             setattr(self, attr, str(val))
 
+        # set distribution and version if not specified by user
+        if not self.distro:
+            self.distro = 'ubuntu'
+
         if not self.version and self.distro:
             self.version = DISTROS[self.distro]['default_version']
 
@@ -850,9 +854,6 @@ class IsoImage:
 
 def vmcreate(args, conf=None):
 
-    if not args.distro:
-        args.distro = 'ubuntu'
-
     if not conf:
         conf = Config(args)
 
@@ -876,7 +877,7 @@ def vmcreate(args, conf=None):
     if conf.user_data:
         vbox.setextradata('user_data', conf.user_data)
 
-    image = get_image(vbox, conf.version, image=args.distro)
+    image = get_image(vbox, conf.version, image=conf.distro)
     path_to_disk = image.convert_to_vdi(conf.name + '.vdi', conf.disk_size)
 
     iso = IsoImage(conf)
