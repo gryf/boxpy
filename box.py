@@ -153,7 +153,7 @@ _boxpy() {
                         _ssh_identityfile
                         ;;
                     --distro)
-                        COMPREPLY=( $(compgen -W "ubuntu" -- ${cur}) )
+                        COMPREPLY=( $(compgen -W "ubuntu fedora" -- ${cur}) )
                         ;;
                     --*)
                         COMPREPLY=( )
@@ -232,7 +232,7 @@ class Config:
 
     def __init__(self, args, vbox=None):
         self.advanced = None
-        self.distro = args.distro
+        self.distro = None
         self.cpus = None
         self.disk_size = None
         self.hostname = None
@@ -255,7 +255,7 @@ class Config:
             setattr(self, attr, vm_info[attr])
 
         # next, grab the cloud config file
-        if args.config:
+        if 'config' in args:
             self.user_data = os.path.abspath(args.config)
         else:
             self.user_data = vm_info.get('user_data')
@@ -273,7 +273,7 @@ class Config:
                 continue
             setattr(self, attr, str(val))
 
-        if not self.version:
+        if not self.version and self.distro:
             self.version = DISTROS[self.distro]['default_version']
 
         # finally, figure out host name
@@ -440,7 +440,7 @@ class VBoxManage:
                                           encoding=sys.getdefaultencoding(),
                                           stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError:
-            return None
+            return {}
 
         self.vm_info = {}
 
