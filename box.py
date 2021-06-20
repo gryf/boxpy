@@ -930,6 +930,8 @@ def vmcreate(args, conf=None):
     print('You can access your VM by issuing:')
     print(f'ssh -p {conf.port} -i {conf.ssh_key_path[:-4]} '
           f'{DISTROS[conf.distro]["username"]}@localhost')
+    print('or simply:')
+    print(f'boxpy ssh {conf.name}')
     return 0
 
 
@@ -985,8 +987,9 @@ def connect(args):
 
 def main():
     parser = argparse.ArgumentParser(description="Automate deployment and "
-                                     "maintenance of Ubuntu VMs using "
-                                     "VirtualBox and Ubuntu cloud images")
+                                     "maintenance of VMs using cloud config,"
+                                     "VirtualBox and Fedora or Ubuntu cloud "
+                                     "images")
 
     subparsers = parser.add_subparsers(help='supported commands')
 
@@ -1011,7 +1014,7 @@ def main():
                         "to. By default to 10GB")
     create.add_argument('-u', '--cpus', type=int, help="amount of CPUs to be "
                         "configured. Default 1.")
-    create.add_argument('-v', '--version', help=f"Ubuntu server version. "
+    create.add_argument('-v', '--version', help=f"distribution version. "
                         f"Default {DISTROS['ubuntu']['default_version']}")
 
     destroy = subparsers.add_parser('destroy', help='destroy VM')
@@ -1043,7 +1046,7 @@ def main():
                          help='disk size to be expanded to')
     rebuild.add_argument('-u', '--cpus', type=int,
                          help='amount of CPUs to be configured')
-    rebuild.add_argument('-v', '--version', help='Ubuntu server version')
+    rebuild.add_argument('-v', '--version', help='distribution version')
     rebuild.set_defaults(func=vmrebuild)
 
     completion = subparsers.add_parser('completion', help='generate shell '
