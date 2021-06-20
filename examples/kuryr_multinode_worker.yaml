@@ -49,6 +49,7 @@ write_files:
       disable_service horizon
       
       # kubernetes
+      disable_service kubernetes-master
       enable_service kubernetes-worker
       
       # kuryr
@@ -57,11 +58,16 @@ write_files:
       
       enable_service n-cpu
       
+      # OVN
+      enable_service ovn-controller
+      enable_service ovs-vswitchd
+      enable_service ovsdb-server
+      
       # Placement API
       enable_service placement-client
       
       # Neutron services
-      enable_service q-agt
+      enable_service q-ovn-metadata-agent
       disable_service tempest
       disable_service tls-proxy
       
@@ -95,10 +101,7 @@ write_files:
       
       # enabled plugins
       enable_plugin devstack-plugin-container https://opendev.org/openstack/devstack-plugin-container
-      enable_plugin kuryr-kubernetes https://github.com/gryf/kuryr-kubernetes kubeadm-multinode
-      enable_plugin kuryr-tempest-plugin https://opendev.org/openstack/kuryr-tempest-plugin
-      enable_plugin neutron https://opendev.org/openstack/neutron
-      enable_plugin octavia https://opendev.org/openstack/octavia  
+      enable_plugin kuryr-kubernetes https://opendev.org/openstack/kuryr
 runcmd:
   - [su, -, ubuntu, -c, "git clone https://github.com/gryf/vmstrap"]
   - [su, -, ubuntu, -c, "vmstrap/bootstrap.sh"]

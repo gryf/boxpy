@@ -66,10 +66,11 @@ write_files:
       
       # kubernetes
       enable_service kubernetes-master
+      disable_service kubernetes-worker
       
       # kuryr
-      enable_service kuryr-kubernetes
       enable_service kuryr-daemon
+      enable_service kuryr-kubernetes
       
       # mysql.
       enable_service mysql
@@ -81,11 +82,18 @@ write_files:
       enable_service n-cpu
       enable_service n-sch
       enable_service neutron
+      enable_service neutron-tag-ports-during-bulk-creation
       enable_service o-api
       enable_service o-cw
       enable_service o-hk
       enable_service o-hm
       enable_service octavia
+      
+      # OVN
+      enable_service ovn-controller
+      enable_service ovn-northd
+      enable_service ovs-vswitchd
+      enable_service ovsdb-server
       
       # Placement API
       enable_service placement-api
@@ -96,6 +104,7 @@ write_files:
       enable_service q-dhcp
       enable_service q-l3
       enable_service q-meta
+      enable_service q-ovn-metadata-agent
       enable_service q-svc
       enable_service rabbit
       disable_service s-account
@@ -135,7 +144,7 @@ write_files:
       
       # enabled plugins
       enable_plugin devstack-plugin-container https://opendev.org/openstack/devstack-plugin-container
-      enable_plugin kuryr-kubernetes https://github.com/gryf/kuryr-kubernetes kubeadm-multinode
+      enable_plugin kuryr-kubernetes https://github.com/gryf/kuryr-kubernetes
       enable_plugin kuryr-tempest-plugin https://opendev.org/openstack/kuryr-tempest-plugin
       enable_plugin neutron https://opendev.org/openstack/neutron
       enable_plugin octavia https://opendev.org/openstack/octavia
