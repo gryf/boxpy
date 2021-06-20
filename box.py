@@ -282,7 +282,7 @@ class Config:
         if not self.distro:
             self.distro = 'ubuntu'
 
-        if not self.version and self.distro:
+        if not self.version:
             self.version = DISTROS[self.distro]['default_version']
 
         # finally, figure out host name
