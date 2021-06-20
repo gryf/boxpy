@@ -273,7 +273,7 @@ class Config:
         # the command line
         vm_info = vbox.get_vm_info() if vbox else {}
         for attr in self.ATTRS:
-            val = getattr(args, attr, None) or vm_info.get(attr)
+            val = getattr(args, attr, None)
             if not val:
                 continue
             setattr(self, attr, str(val))
