@@ -231,6 +231,85 @@ class BoxSysCommandError(BoxError):
     pass
 
 
+class FakeLogger:
+    """
+    print based "logger" class. I like to use 'end' parameter of print
+    function to get pseudo activity/progress thing.
+
+    There are 5 levels (similar to just as in original logger) of logging:
+
+    debug2 = 0
+    debug = 1
+    details = 2
+    info = 3
+    warning = 4
+    fatal = 5
+    """
+
+    def __init__(self, colors=False):
+        """
+        Initialize named logger
+        """
+        self._level = 3
+        self._colors = colors
+
+    def debug2(self, msg, *args, end='\n'):
+        if self._level < 2:
+            return
+        self._print_msg(msg, 1, end, *args)
+
+    def debug(self, msg, *args, end='\n'):
+        if self._level < 2:
+            return
+        self._print_msg(msg, 1, end, *args)
+
+    def details(self, msg, *args, end='\n'):
+        if self._level < 3:
+            return
+        self._print_msg(msg, 2, end, *args)
+
+    def info(self, msg, *args, end='\n'):
+        if self._level < 4:
+            return
+        self._print_msg(msg, 3, end, *args)
+
+    def warning(self, msg, *args, end='\n'):
+        if self._level < 5:
+            return
+        self._print_msg(msg, 4, end, *args)
+
+    def fatal(self, msg, *args, end='\n'):
+        if self._level < 6:
+            return
+        self._print_msg(msg, 5, end, *args)
+
+    def _print_msg(self, msg, level, end, *args):
+        reset = "\x1b[0m"
+        colors = {0: "\x1b[37m",
+                  1: "\x1b[90m",
+                  2: "\x1b[36m",
+                  3: "\x1b[32m",
+                  4: "\x1b[93m",
+                  5: "\x1b[91m"}
+
+        message = msg % args
+        if self._colors:
+            message = colors[level] + msg + reset
+
+        print(message, end=end)
+
+    def set_verbose(self, verbose_level, quiet_level):
+        """
+        Change verbosity level. Default level is warning.
+        """
+
+        if quiet_level:
+            self._level -= quiet_level
+
+        if verbose_level:
+            self._level += verbose_level
+
+
 class Config:
     ATTRS = ('cpus', 'config', 'disk_size', 'distro', 'hostname', 'key',
              'memory', 'name', 'port', 'version')
@@ -313,8 +392,8 @@ class Config:
 
                 fname = os.path.expanduser(os.path.expandvars(fname))
                 if not os.path.exists(fname):
-                    print(f"WARNING: file '{file_data['filename']}' doesn't "
-                          f"exists.")
+                    LOG.warning("File '%s' doesn't exists.",
+                              file_data['filename'])
                     continue
 
                 with open(fname) as fobj:
@@ -364,8 +443,8 @@ class Config:
                     custom_conf = yaml.safe_load(fobj)
                     conf = self._update(conf, custom_conf)
             else:
-                print(f"WARNING: Provided user_data: {self.user_data} doesn't"
-                      " exists.")
+                LOG.warning("WARNING: Provided user_data: '%s' doesn't "
+                            "exists.", self.user_data)
 
         # update the attributes with data from read user cloud config
         for key, val in conf.get('boxpy_data', {}).items():
@@ -510,7 +589,7 @@ class VBoxManage:
             return None
 
         for line in out.split('\n'):
-            print(line)
+            LOG.details(line)
             if line.startswith('UUID:'):
                 self.uuid = line.split('UUID:')[1].strip()
 
@@ -721,11 +800,11 @@ class Ubuntu(Image):
 
     def _download_image(self):
         if self._checksum():
-            print(f'Image already downloaded: {self._img_fname}')
+            LOG.details('Image already downloaded: %s', self._img_fname)
             return
 
         fname = os.path.join(CACHE_DIR, self._img_fname)
-        print(f'Downloading image {self._img_fname}')
+        LOG.info('Downloading image %s', self._img_fname)
         subprocess.call(['wget', '-q', self._img_url, '-O', fname])
 
         if not self._checksum():
@@ -733,7 +812,7 @@ class Ubuntu(Image):
             raise BoxSysCommandError('Checksum for downloaded image differ '
                                      'from expected.')
         else:
-            print(f'Downloaded image {self._img_fname}')
+            LOG.info('Downloaded image %s', self._img_fname)
 
 
 class Fedora(Image):
@@ -783,7 +862,7 @@ class Fedora(Image):
 
     def _download_image(self):
         if self._checksum():
-            print(f'Image already downloaded: {self._img_fname}')
+            LOG.details('Image already downloaded: %s', self._img_fname)
             return
 
         fname = os.path.join(CACHE_DIR, self._img_fname)
@@ -794,7 +873,7 @@ class Fedora(Image):
             raise BoxSysCommandError('Checksum for downloaded image differ '
                                      'from expected.')
         else:
-            print(f'Downloaded image {self._img_fname}')
+            LOG.info('Downloaded image %s', self._img_fname)
 
 
 DISTROS = {'ubuntu': {'username': 'ubuntu',
@@ -852,6 +931,9 @@ class IsoImage:
                                      'drive')
 
 
+LOG = FakeLogger(colors=True)
+
+
 def vmcreate(args, conf=None):
 
     if not conf:
@@ -861,7 +943,7 @@ def vmcreate(args, conf=None):
     if conf.port:
         used = vbox.is_port_in_use(conf.port)
         if used:
-            print(f'Error: Port {conf.port} is in use by "{used}" VM.')
+            LOG.fatal('Error: Port %s is in use by "%s" VM.', conf.port, used)
             return 11
 
     if not vbox.create(conf.cpus, conf.memory, conf.port):
@@ -904,18 +986,18 @@ def vmcreate(args, conf=None):
         image.cleanup()
 
     # than, let's try to see if boostraping process has finished
-    print('Waiting for cloud init to finish ', end='')
+    LOG.info('Waiting for cloud init to finish ', end='')
     try:
         while True:
             if vbox.vm_info['uuid'] in vbox.get_running_vms():
-                print('.', end='')
+                LOG.info('.', end='')
                 sys.stdout.flush()
                 time.sleep(3)
             else:
-                print(' done.')
+                LOG.info(' done.')
                 break
     except KeyboardInterrupt:
-        print('\nIterrupted, cleaning up.')
+        LOG.warning('\nIterrupted, cleaning up.')
         vbox.poweroff(silent=True)
         _cleanup(vbox, iso, image, path_to_iso)
         vbox.destroy()
@@ -927,11 +1009,11 @@ def vmcreate(args, conf=None):
 
     # reread config to update fields
     conf = Config(args, vbox)
-    print('You can access your VM by issuing:')
-    print(f'ssh -p {conf.port} -i {conf.ssh_key_path[:-4]} '
-          f'{DISTROS[conf.distro]["username"]}@localhost')
-    print('or simply:')
-    print(f'boxpy ssh {conf.name}')
+    LOG.info('You can access your VM by issuing:')
+    LOG.info(f'ssh -p {conf.port} -i {conf.ssh_key_path[:-4]} '
+             f'{DISTROS[conf.distro]["username"]}@localhost')
+    LOG.info('or simply:')
+    LOG.info(f'boxpy ssh {conf.name}')
     return 0
 
 
@@ -990,6 +1072,14 @@ def main():
                                      "maintenance of VMs using cloud config,"
                                      "VirtualBox and Fedora or Ubuntu cloud "
                                      "images")
+
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('-v', '--verbose', action='count', default=0,
+                       help='be verbose. Adding more "v" will increase '
+                       'verbosity')
+    group.add_argument('-q', '--quiet', action='count', default=0,
+                       help='suppress output. Adding more "q" will make '
+                       'boxpy to shut up.')
 
     subparsers = parser.add_subparsers(help='supported commands')
 
@@ -1060,6 +1150,8 @@ def main():
     ssh.set_defaults(func=connect)
 
     args = parser.parse_args()
+
+    LOG.set_verbose(args.verbose, args.quiet)
 
     if hasattr(args, 'func'):
         return args.func(args)
