@@ -1,0 +1,41 @@
+packages:
+  - ccze
+  - exuberant-ctags
+  - flake8
+  - git-review
+  - htop
+  - ipython3
+  - jq
+  - mc
+  - python-apsw
+  - python3-flake8
+  - python3-jedi
+  - python3-pip
+  - rlwrap
+  - silversearcher-ag
+  - tmate
+  - tmux
+  - vim-nox
+write_files:
+  - path: /tmp/local.conf
+    permissions: '0644'
+    owner: ubuntu:ubuntu
+    content: |
+      [[local|localrc]]
+      ADMIN_PASSWORD=pass
+      DATABASE_PASSWORD=$$ADMIN_PASSWORD
+      RABBIT_PASSWORD=$$ADMIN_PASSWORD
+      SERVICE_PASSWORD=$$ADMIN_PASSWORD
+runcmd:
+  - [su, -, ubuntu, -c, "git clone https://github.com/gryf/vmstrap"]
+  - [su, -, ubuntu, -c, "vmstrap/bootstrap.sh"]
+  - [rm, -fr, /home/ubuntu/vmstrap]
+  - [su, -, ubuntu, -c, "cp /tmp/local.conf /home/ubuntu/devstack/"]
+  - [su, -, ubuntu, -c, "echo 'export HOST_IP=10.0.2.15' >> .bashrc"]
+boxpy_data:
+  key: vm
+  cpus: 2
+  memory: 6GB
+  disk_size: 10GB
+  distro: ubuntu
+  version: 20.04

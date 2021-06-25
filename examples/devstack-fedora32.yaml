@@ -1,0 +1,36 @@
+package_update: true
+packages:
+  - bash-completion
+  - ctags-etags
+  - git
+  - git-review
+  - htop
+  - jq
+  - mc
+  - the_silver_searcher
+  - vim-enhanced
+write_files:
+  - path: /tmp/local.conf
+    permissions: '0644'
+    owner: fedora:fedora
+    content: |
+      [[local|localrc]]
+      ADMIN_PASSWORD=pass
+      DATABASE_PASSWORD=$$ADMIN_PASSWORD
+      RABBIT_PASSWORD=$$ADMIN_PASSWORD
+      SERVICE_PASSWORD=$$ADMIN_PASSWORD
+      disable_service horizon
+      disable_service cinder
+      disable_service n-vnc
+      disable_service dstat
+runcmd:
+  - [su, -, fedora, -c, "git clone https://opendev.org/openstack/devstack ~/devstack"]
+  - [su, -, fedora, -c, "cp /tmp/local.conf /home/fedora/devstack/"]
+  - [su, -, fedora, -c, "echo 'export HOST_IP=10.0.2.15' >> .bashrc"]
+boxpy_data:
+  key: vm
+  cpus: 2
+  memory: 4GB
+  disk_size: 10GB
+  distro: fedora
+  version: 32
