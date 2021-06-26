@@ -254,47 +254,50 @@ class FakeLogger:
         self._colors = colors
 
     def debug2(self, msg, *args, end='\n'):
-        if self._level < 2:
+        if self._level > 0:
             return
-        self._print_msg(msg, 1, end, *args)
+        self._print_msg(msg, 0, end, *args)
 
     def debug(self, msg, *args, end='\n'):
-        if self._level < 2:
+        if self._level > 1:
             return
         self._print_msg(msg, 1, end, *args)
 
     def details(self, msg, *args, end='\n'):
-        if self._level < 3:
+        if self._level > 2:
             return
         self._print_msg(msg, 2, end, *args)
 
     def info(self, msg, *args, end='\n'):
-        if self._level < 4:
+        if self._level > 3:
             return
         self._print_msg(msg, 3, end, *args)
 
     def warning(self, msg, *args, end='\n'):
-        if self._level < 5:
+        if self._level > 4:
             return
         self._print_msg(msg, 4, end, *args)
 
     def fatal(self, msg, *args, end='\n'):
-        if self._level < 6:
+        if self._level > 5:
             return
         self._print_msg(msg, 5, end, *args)
 
     def _print_msg(self, msg, level, end, *args):
         reset = "\x1b[0m"
-        colors = {0: "\x1b[37m",
-                  1: "\x1b[90m",
-                  2: "\x1b[36m",
-                  3: "\x1b[32m",
+        colors = {0: "\x1b[90m",
+                  1: "\x1b[36m",
+                  2: "\x1b[94m",
+                  3: "\x1b[92m",
                   4: "\x1b[93m",
                   5: "\x1b[91m"}
 
-        message = msg % args
+        message = msg
+        if args:
+            message = msg % args
+
         if self._colors:
-            message = colors[level] + msg + reset
+            message = colors[level] + message + reset
 
         print(message, end=end)
 
@@ -304,10 +307,10 @@ class FakeLogger:
         """
 
         if quiet_level:
-            self._level -= quiet_level
+            self._level += quiet_level
 
         if verbose_level:
-            self._level += verbose_level
+            self._level -= verbose_level
 
 
 class Config:
