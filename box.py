@@ -34,10 +34,9 @@ users:
     gecos: ${realname}
     sudo: ALL=(ALL) NOPASSWD:ALL
     groups: users, admin
-power_state:
-  mode: poweroff
-  timeout: 10
-  condition: True
+no_ssh_fingerprints: true
+ssh:
+  emit_keys_to_console: false
 boxpy_data:
   cpus: 1
   disk_size: 10240
@@ -579,12 +578,22 @@ class VBoxManage:
         return Run(['vboxmanage', 'list', 'runningvms']).stdout
 
     def destroy(self):
+        self.get_vm_info()
+        if not self.vm_info:
+            LOG.fatal("Cannot remove VM \"%s\" - it doesn't exist.",
+                      self.name_or_uuid)
+            return 4
+
         LOG.info('Removing VM %s.', self.name_or_uuid)
         self.poweroff(silent=True)
+        time.sleep(1)  # wait a bit, for VM shutdown to complete
+        # detach cloud image.
+        self.storageattach('IDE', 1, 'dvddrive', 'none')
+        self.closemedium('dvd', self.vm_info['iso_path'])
         if Run(['vboxmanage', 'unregistervm', self.name_or_uuid,
                 '--delete']).returncode != 0:
             LOG.fatal('Removing VM "%s" failed', self.name_or_uuid)
-            raise BoxVBoxFailure()
+            return 7
 
     def create(self, cpus, memory, port=None):
         LOG.info('Creating VM %s.', self.name_or_uuid)
@@ -972,6 +981,7 @@ def vmcreate(args, conf=None):
 
     iso = IsoImage(conf)
     path_to_iso = iso.get_generated_image()
+    vbox.setextradata('iso_path', path_to_iso)
     vbox.storageattach('SATA', 0, 'hdd', path_to_disk)
     vbox.storageattach('IDE', 1, 'dvddrive', path_to_iso)
 
@@ -986,34 +996,42 @@ def vmcreate(args, conf=None):
     # give VBox some time to actually change the state of the VM before query
     time.sleep(3)
 
-    def _cleanup(vbox, iso, image, path_to_iso):
-        time.sleep(1)  # wait a bit, for VM shutdown to complete
-        vbox.storageattach('IDE', 1, 'dvddrive', 'none')
-        vbox.closemedium('dvd', path_to_iso)
-        iso.cleanup()
-        image.cleanup()
-
     # than, let's try to see if boostraping process has finished
     LOG.info('Waiting for cloud init to finish ', end='')
+    cmd = ['ssh', '-o', 'StrictHostKeyChecking=no',
+           '-o', 'UserKnownHostsFile=/dev/null',
+           '-o', 'ConnectTimeout=2',
+           '-i', conf.ssh_key_path[:-4],
+           f'ssh://{DISTROS[conf.distro]["username"]}'
+           f'@localhost:{vbox.vm_info["port"]}', 'cloud-init status']
     try:
         while True:
-            if vbox.vm_info['uuid'] in vbox.get_running_vms():
+            out = Run(cmd).stdout
+            LOG.debug2('Out: %s', out)
+
+            if (not out) or ('status' in out and 'running' in out):
                 LOG.info('.', end='')
                 sys.stdout.flush()
                 time.sleep(3)
-            else:
-                LOG.info(' done.')
-                break
+                continue
+
+            LOG.info(' done.')
+            break
+        out = out.split(':')[1].strip()
+        if out != 'done':
+            LOG.warning('Cloud init finished with "%s" status. You can log '
+                        'in and investigate.', out)
+
     except KeyboardInterrupt:
         LOG.warning('\nIterrupted, cleaning up.')
-        vbox.poweroff(silent=True)
-        _cleanup(vbox, iso, image, path_to_iso)
+        iso.cleanup()
+        image.cleanup()
         vbox.destroy()
         return 1
 
-    # dettach ISO image
-    _cleanup(vbox, iso, image, path_to_iso)
-    vbox.poweron()
+    # cleanup
+    iso.cleanup()
+    image.cleanup()
 
     # reread config to update fields
     conf = Config(args, vbox)

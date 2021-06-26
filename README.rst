@@ -116,15 +116,10 @@ Default user-script looks as follows:
        gecos: ubuntu
        sudo: ALL=(ALL) NOPASSWD:ALL
        groups: users, admin
-   power_state:
-     mode: poweroff
-     timeout: 10
-     condition: True
 
 It is really simple, and use ``string.Template`` for exchanging token
 ``$ssh_key`` with default, or provided public key, so that you will be able to
-log in into the VM using that key. Section ``power_state`` is used internally
-for making sure the cloud-init finish up and the VM will be started again.
+log in into the VM using that key.
 
 Note, that you need to be extra careful regarding ``$`` sign. As explained
 above ``$ssh_key`` will be used as a "variable" for the template to substitute
@@ -145,10 +140,10 @@ pass filenames to the custom config, instead of filling up
        filename: /path/to/local/file.txt
 
 during processing this file, boxpy will look for ``filename`` key in the yaml
-file for the ``write_files`` sections, and it will remove that key read the
+file for the ``write_files`` sections, and it will remove that key, read the
 file and put its contents under ``content`` key. What is more important, that
-will be done after template processing, so that there will be no interference
-for possible ``$`` characters.
+will be done after template processing, so there will be no interference for
+possible ``$`` characters.
 
 What is more interesting is the fact, that you could use whatever cloud-init
 accepts, and a special section, for keeping configuration, so that you don't
@@ -184,6 +179,18 @@ initialized, just to make you an idea, what could be done with it.
 
 You can find some real world examples of the yaml cloud-init files that I use
 in examples directory.
+
+There is special section ``boxpy_data``, where you can place all the
+configuration for the VM. Keys are the same as in ``create`` command options.
+There is one additional key ``advanced`` which for now can be used for
+configuration additional NIC for virtual machine, i.e:
+
+.. code:: yaml
+
+   …
+   boxpy_data:
+     advanced:
+       nic2: intnet
 
 
 License
