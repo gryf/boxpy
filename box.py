@@ -240,14 +240,6 @@ class BoxVBoxFailure(BoxError):
     pass
 
 
-class BoxConvertionError(BoxError):
-    pass
-
-
-class BoxSysCommandError(BoxError):
-    pass
-
-
 class FakeLogger:
     """
     print based "logger" class. I like to use 'end' parameter of print
@@ -259,8 +251,9 @@ class FakeLogger:
     debug = 1
     details = 2
     info = 3
-    warning = 4
-    fatal = 5
+    header = 4
+    warning = 5
+    fatal = 6
     """
 
     def __init__(self, colors=False):
@@ -787,6 +780,7 @@ class Image:
         return self.vbox.move_and_resize_image(vdi_path, disk_img, size)
 
     def cleanup(self):
+        LOG.info('Image: Cleaning up temporary files from "%s"', self._tmp)
         Run(['rm', '-fr', self._tmp])
 
     def _convert_to_raw(self):
@@ -962,7 +956,7 @@ class IsoImage:
         return os.path.join(self._tmp, CLOUD_IMAGE)
 
     def cleanup(self):
-        LOG.info('Cleaning up temporary files from "%s"', self._tmp)
+        LOG.info('IsoImage: Cleaning up temporary files from "%s"', self._tmp)
         Run(['rm', '-fr', self._tmp])
 
     def _create_cloud_image(self):
