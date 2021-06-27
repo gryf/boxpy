@@ -330,13 +330,14 @@ class FakeLogger:
 
 
 class Config:
-    ATTRS = ('cpus', 'config', 'disk_size', 'distro', 'hostname', 'key',
-             'memory', 'name', 'port', 'version')
+    ATTRS = ('cpus', 'config', 'creator', 'disk_size', 'distro', 'hostname',
+             'key', 'memory', 'name', 'port', 'version')
 
     def __init__(self, args, vbox=None):
         self.advanced = None
         self.distro = None
         self.cpus = None
+        self.creator = None
         self.disk_size = None
         self.hostname = None
         self.key = None
@@ -1031,6 +1032,9 @@ def vmcreate(args, conf=None):
     if conf.user_data:
         if not vbox.setextradata('user_data', conf.user_data):
             return 6
+
+    if not vbox.setextradata('creator', 'boxpy'):
+        return 13
 
     image = get_image_object(vbox, conf.version, image=conf.distro)
     path_to_disk = image.convert_to_vdi(conf.name + '.vdi', conf.disk_size)
