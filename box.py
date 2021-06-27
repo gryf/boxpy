@@ -19,6 +19,8 @@ import yaml
 CACHE_DIR = os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
 CLOUD_IMAGE = "ci.iso"
 FEDORA_RELEASE_MAP = {'32': '1.6', '33': '1.2', '34': '1.2'}
+TYPE_MAP = {'HardDisk': 'disk', 'DVD': 'dvd', 'Floppy': 'floppy'}
+DISTRO_MAP = {'ubuntu': 'Ubuntu', 'fedora': 'Fedora'}
 META_DATA_TPL = string.Template('''\
 instance-id: $instance_id
 local-hostname: $vmhostname
@@ -118,7 +120,7 @@ _boxpy() {
         fi
     fi
 
-    opts="create destroy rebuild list completion ssh"
+    opts="create destroy rebuild info list completion ssh"
     if [[ ${cur} == "-q" || ${cur} == "-v" || ${COMP_CWORD} -eq 1 ]] ; then
         COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
         return 0
@@ -161,7 +163,7 @@ _boxpy() {
             fi
 
             ;;
-        destroy)
+        destroy|info)
             if [[ ${prev} == ${cmd} ]]; then
                 _vms_comp vms
             fi
@@ -1118,6 +1120,51 @@ def vmlist(args):
     return 0
 
 
+def vminfo(args):
+    vbox = VBoxManage(args.name)
+    info = vbox.get_vm_info()
+
+    LOG.header('Details for VM: %s', args.name)
+    LOG.info('Creator:\t\t%s', info.get('creator', 'unknown/manual'))
+    LOG.info('Number of CPU cores:\t%s', info['cpus'])
+
+    memory = int(info['memory'])
+    if memory//1024 == 0:
+        memory = f"{memory}MB"
+    else:
+        memory = memory // 1024
+        memory = f"{memory}GB"
+    LOG.info('Memory:\t\t\t%s', memory)
+
+    if info.get('media'):
+        LOG.info('Attached images:')
+        images = []
+        for img in info['media']:
+            size = int(vbox.get_media_size(img['uuid'], TYPE_MAP[img['type']]))
+            if size//1024 == 0:
+                size = f"{size}MB"
+            else:
+                size = size // 1024
+                size = f"{size}GB"
+            if img['type'] == 'DVD':
+                images.append(f"  {img['type']}:\t\t\t{size}")
+            else:
+                images.append(f"  {img['type']}:\t\t{size}")
+
+        images.sort()
+        for line in images:
+            LOG.info(line)
+
+    if 'distro' in info:
+        LOG.info('Operating System:\t%s %s', DISTRO_MAP[info['distro']],
+                 info['version'])
+    if 'key' in info:
+        LOG.info('SSH key:\t\t%s', info['key'])
+
+    if 'port' in info:
+        LOG.info('SSH port:\t\t%s', info['port'])
+
+
 def vmrebuild(args):
     LOG.header('Rebuilding VM: %s', args.name)
     vbox = VBoxManage(args.name)
@@ -1247,6 +1294,10 @@ def main():
     ssh = subparsers.add_parser('ssh', help='Connect to the machine via SSH')
     ssh.add_argument('name', help='name or UUID of the VM')
     ssh.set_defaults(func=connect)
+
+    info = subparsers.add_parser('info', help='details about VM')
+    info.add_argument('name', help='name or UUID of the VM')
+    info.set_defaults(func=vminfo)
 
     args = parser.parse_args()
 
