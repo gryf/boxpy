@@ -523,8 +523,8 @@ class VBoxManage:
 
         return disk_path
 
-    def get_media_size(self, media_path):
-        out = Run(['vboxmanage', 'showmediuminfo', media_path]).stdout
+    def get_media_size(self, media_path, type_='disk'):
+        out = Run(['vboxmanage', 'showmediuminfo', type_, media_path]).stdout
 
         for line in out.split('\n'):
             if line.startswith('Capacity:'):
@@ -551,7 +551,7 @@ class VBoxManage:
         dom = xml.dom.minidom.parse(self.vm_info['config_file'])
         gebtn = dom.getElementsByTagName
 
-        self.vm_info['cpus'] = gebtn('CPU')[0].getAttribute('count')
+        self.vm_info['cpus'] = gebtn('CPU')[0].getAttribute('count') or '1'
         self.vm_info['uuid'] = gebtn('Machine')[0].getAttribute('uuid')[1:-1]
         self.vm_info['memory'] = gebtn('Memory')[0].getAttribute('RAMSize')
 
@@ -559,6 +559,19 @@ class VBoxManage:
             key = extradata.getAttribute('name')
             val = extradata.getAttribute('value')
             self.vm_info[key] = val
+
+        images = []
+        for sc in gebtn('StorageController'):
+            name = sc.getAttribute('name')
+            for ad in sc.getElementsByTagName('AttachedDevice'):
+                if not ad.getElementsByTagName('Image'):
+                    continue
+                image = ad.getElementsByTagName('Image')[0]
+                type_ = ad.getAttribute('type')
+                uuid = image.getAttribute('uuid')[1:-1]
+                images.append({'type': type_, 'uuid': uuid})
+
+        self.vm_info['media'] = images
 
         if len(gebtn('Forwarding')):
             fw = gebtn('Forwarding')[0].getAttribute('hostport')
