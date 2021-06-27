@@ -369,7 +369,6 @@ class Config:
 
         # than, override all of the attributes with provided arguments from
         # the command line
-        vm_info = vbox.get_vm_info() if vbox else {}
         for attr in self.ATTRS:
             val = getattr(args, attr, None)
             if not val:
