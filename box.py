@@ -224,8 +224,8 @@ class Run:
             LOG.debug2(result.stderr)
 
         self.returncode = result.returncode
-        self.stdout = result.stdout
-        self.stderr = result.stderr
+        self.stdout = result.stdout.strip()
+        self.stderr = result.stderr.strip()
 
 
 class BoxError(Exception):
@@ -290,24 +290,30 @@ class FakeLogger:
             return
         self._print_msg(msg, 3, end, *args)
 
-    def warning(self, msg, *args, end='\n'):
+    def header(self, msg, *args, end='\n'):
         if self._level > 4:
             return
         self._print_msg(msg, 4, end, *args)
 
-    def fatal(self, msg, *args, end='\n'):
+    def warning(self, msg, *args, end='\n'):
         if self._level > 5:
             return
         self._print_msg(msg, 5, end, *args)
+
+    def fatal(self, msg, *args, end='\n'):
+        if self._level > 6:
+            return
+        self._print_msg(msg, 6, end, *args)
 
     def _print_msg(self, msg, level, end, *args):
         reset = "\x1b[0m"
         colors = {0: "\x1b[90m",
                   1: "\x1b[36m",
                   2: "\x1b[94m",
-                  3: "\x1b[92m",
-                  4: "\x1b[93m",
-                  5: "\x1b[91m"}
+                  3: "\x1b[0m",
+                  4: "\x1b[92m",
+                  5: "\x1b[93m",
+                  6: "\x1b[91m"}
 
         message = msg
         if args:
@@ -412,8 +418,8 @@ class Config:
 
                 fname = os.path.expanduser(os.path.expandvars(fname))
                 if not os.path.exists(fname):
-                    LOG.warning("File '%s' doesn't exists.",
-                              file_data['filename'])
+                    LOG.warning("File '%s' doesn't exists",
+                                file_data['filename'])
                     continue
 
                 with open(fname) as fobj:
@@ -463,8 +469,8 @@ class Config:
                     custom_conf = yaml.safe_load(fobj)
                     conf = self._update(conf, custom_conf)
             else:
-                LOG.warning("WARNING: Provided user_data: '%s' doesn't "
-                            "exists.", self.user_data)
+                LOG.warning("Provided user_data: '%s' doesn't exists",
+                            self.user_data)
 
         # update the attributes with data from read user cloud config
         for key, val in conf.get('boxpy_data', {}).items():
@@ -507,13 +513,14 @@ class VBoxManage:
     def get_disk_path(self):
         path = self._get_vm_config()
         if not path:
+            LOG.warning('Configuration for "%s" not found', self.name_or_uuid)
             return
 
         dom = xml.dom.minidom.parse(path)
         if len(dom.getElementsByTagName('HardDisk')) != 1:
             # don't know what to do with multiple discs
-            raise BoxError('Cannot deal with multiple attached disks, perhaps '
-                           'you need to do this manually')
+            raise BoxError()
+
         disk = dom.getElementsByTagName('HardDisk')[0]
         location = disk.getAttribute('location')
         if location.startswith('/'):
@@ -580,30 +587,29 @@ class VBoxManage:
     def destroy(self):
         self.get_vm_info()
         if not self.vm_info:
-            LOG.fatal("Cannot remove VM \"%s\" - it doesn't exist.",
+            LOG.fatal("Cannot remove VM \"%s\" - it doesn't exist",
                       self.name_or_uuid)
             return 4
 
-        LOG.info('Removing VM %s.', self.name_or_uuid)
         self.poweroff(silent=True)
         time.sleep(1)  # wait a bit, for VM shutdown to complete
         # detach cloud image.
         self.storageattach('IDE', 1, 'dvddrive', 'none')
-        self.closemedium('dvd', self.vm_info['iso_path'])
+        if self.vm_info.get('iso_path'):
+            self.closemedium('dvd', self.vm_info['iso_path'])
         if Run(['vboxmanage', 'unregistervm', self.name_or_uuid,
                 '--delete']).returncode != 0:
             LOG.fatal('Removing VM "%s" failed', self.name_or_uuid)
             return 7
 
     def create(self, cpus, memory, port=None):
-        LOG.info('Creating VM %s.', self.name_or_uuid)
         self.uuid = None
         memory = convert_to_mega(memory)
 
         out = Run(['vboxmanage', 'createvm', '--name', self.name_or_uuid,
                    '--register'])
         if out.returncode != 0:
-            LOG.fatal('Failed to create VM.')
+            LOG.fatal('Failed to create VM:\n%s', out.stderr)
             return None
 
         for line in out.stdout.split('\n'):
@@ -624,29 +630,35 @@ class VBoxManage:
                 '--audio', 'none',
                 '--nic1', 'nat',
                 '--natpf1', f'guestssh,tcp,,{port},,22']).returncode != 0:
-            LOG.fatal(f'Cannot modify VM "{self.name_or_uuid}".')
+            LOG.fatal(f'Cannot modify VM "{self.name_or_uuid}"')
             raise BoxVBoxFailure()
 
         return self.uuid
 
     def convertfromraw(self, src, dst):
-        if Run(["vboxmanage", "convertfromraw", src, dst]).returncode != 0:
-            os.unlink(src)
-            LOG.fatal('Cannot convert image to VDI.')
-            raise BoxVBoxFailure()
+        LOG.info('Converting image "%s" to VDI', src)
+        res = Run(["vboxmanage", "convertfromraw", src, dst])
         os.unlink(src)
+        if res.returncode != 0:
+            LOG.fatal('Cannot convert image to VDI:\n%s', res.stderr)
+            return False
+        return True
 
     def closemedium(self, type_, mediumpath):
-        if Run(['vboxmanage', 'closemedium', type_,
-                mediumpath]).returncode != 0:
-            LOG.fatal('Failed close medium %.', mediumpath)
-            raise BoxVBoxFailure()
+        res = Run(['vboxmanage', 'closemedium', type_, mediumpath])
+        if res.returncode != 0:
+            LOG.fatal('Failed close medium %s:\n%s', mediumpath, res.stderr)
+            return False
+        return True
 
     def create_controller(self, name, type_):
-        if Run(['vboxmanage', 'storagectl', self.name_or_uuid, '--name', name,
-                '--add', type_]).returncode != 0:
-            LOG.fatal('Adding controller %s has failed.', type_)
-            raise BoxVBoxFailure()
+        res = Run(['vboxmanage', 'storagectl', self.name_or_uuid, '--name',
+                   name, '--add', type_])
+        if res.returncode != 0:
+            LOG.fatal('Adding controller %s has failed:\n%s', type_,
+                      res.stderr)
+            return False
+        return True
 
     def move_and_resize_image(self, src, dst, size):
         fullpath = os.path.join(self.get_vm_base_path(), dst)
@@ -665,25 +677,34 @@ class VBoxManage:
                 '--device', '0',
                 '--type', type_,
                 '--medium', image]).returncode != 0:
-            LOG.fatal('Attaching %s to VM has failed.', image)
-            raise BoxVBoxFailure()
+            if image == 'none':
+                # detaching images from drive are nonfatal
+                LOG.warning('Detaching image form %s on VM "%s" has failed',
+                            controller_name, self.name_or_uuid)
+            else:
+                LOG.fatal('Attaching %s to VM "%s" has failed', image,
+                          self.name_or_uuid)
+                return False
+            return True
 
     def poweron(self):
         if Run(['vboxmanage', 'startvm', self.name_or_uuid, '--type',
                 'headless']).returncode != 0:
-            LOG.fatal('Failed to start: %s.', self.name_or_uuid)
+            LOG.fatal('Failed to start: %s', self.name_or_uuid)
             raise BoxVBoxFailure()
 
     def setextradata(self, key, val):
-        if Run(['vboxmanage', 'setextradata', self.name_or_uuid, key,
-                val]).returncode != 0:
-            LOG.fatal('Failed to start: %s.', self.name_or_uuid)
-            raise BoxVBoxFailure()
+        res = Run(['vboxmanage', 'setextradata', self.name_or_uuid, key, val])
+        if res.returncode != 0:
+            LOG.fatal('Failed to set extra data: %s: %s\n%s', key, val,
+                      res.stderr)
+            return False
+        return True
 
     def add_nic(self, nic, kind):
         if Run(['vboxmanage', 'modifyvm', self.name_or_uuid, f'--{nic}',
                 kind]).returncode != 0:
-            LOG.fatal('Cannot modify VM "%s".', self.name_or_uuid)
+            LOG.fatal('Cannot modify VM "%s"', self.name_or_uuid)
             raise BoxVBoxFailure()
 
     def is_port_in_use(self, port):
@@ -753,23 +774,30 @@ class Image:
         self._img_fname = None
 
     def convert_to_vdi(self, disk_img, size):
-        self._download_image()
-        self._convert_to_raw()
+        LOG.info('Converting and resizing "%s", new size: %sMB', disk_img,
+                 size)
+        if not self._download_image():
+            return None
+        if not self._convert_to_raw():
+            return None
         raw_path = os.path.join(self._tmp, self._img_fname + ".raw")
         vdi_path = os.path.join(self._tmp, disk_img)
-        self.vbox.convertfromraw(raw_path, vdi_path)
+        if not self.vbox.convertfromraw(raw_path, vdi_path):
+            return None
         return self.vbox.move_and_resize_image(vdi_path, disk_img, size)
 
     def cleanup(self):
         Run(['rm', '-fr', self._tmp])
 
     def _convert_to_raw(self):
+        LOG.info('Converting "%s" to RAW', self._img_fname)
         img_path = os.path.join(CACHE_DIR, self._img_fname)
         raw_path = os.path.join(self._tmp, self._img_fname + ".raw")
         if Run(['qemu-img', 'convert', '-O', 'raw', img_path,
                 raw_path]).returncode != 0:
-            LOG.fatal('Cannot convert image %s to RAW.', self._img_fname)
-            raise BoxConvertionError()
+            LOG.fatal('Converting image %s to RAW failed', self._img_fname)
+            return False
+        return True
 
     def _download_image(self):
         raise NotImplementedError()
@@ -792,8 +820,10 @@ class Ubuntu(Image):
         checksum is correct, False otherwise.
         """
         if not os.path.exists(os.path.join(CACHE_DIR, self._img_fname)):
+            LOG.debug('Image %s not downloaded yet', self._img_fname)
             return False
 
+        LOG.info('Calculating checksum for "%s"', self._img_fname)
         expected_sum = None
         fname = os.path.join(self._tmp, self._checksum_file)
         Run(['wget', self._checksum_url, '-q', '-O', fname])
@@ -805,11 +835,14 @@ class Ubuntu(Image):
                     break
 
         if not expected_sum:
-            raise BoxError('Cannot find provided cloud image')
+            LOG.fatal('Cannot find checksum for provided cloud image')
+            return False
 
         if os.path.exists(os.path.join(CACHE_DIR, self._img_fname)):
             cmd = ['sha256sum', os.path.join(CACHE_DIR, self._img_fname)]
             calulated_sum = Run(cmd).stdout.split(' ')[0]
+            LOG.details('Checksum for image: %s, expected: %s', calulated_sum,
+                        expected_sum)
             return calulated_sum == expected_sum
 
         return False
@@ -817,18 +850,19 @@ class Ubuntu(Image):
     def _download_image(self):
         if self._checksum():
             LOG.details('Image already downloaded: %s', self._img_fname)
-            return
+            return True
 
         fname = os.path.join(CACHE_DIR, self._img_fname)
-        LOG.info('Downloading image %s', self._img_fname)
+        LOG.header('Downloading image %s', self._img_fname)
         Run(['wget', '-q', self._img_url, '-O', fname])
 
         if not self._checksum():
             # TODO: make some retry mechanism?
-            LOG.fatal('Checksum for downloaded image differ from expected.')
-            raise BoxSysCommandError()
-        else:
-            LOG.info('Downloaded image %s', self._img_fname)
+            LOG.fatal('Checksum for downloaded image differ from expected')
+            return False
+
+        LOG.header('Downloaded image %s', self._img_fname)
+        return True
 
 
 class Fedora(Image):
@@ -850,11 +884,11 @@ class Fedora(Image):
         checksum is correct, False otherwise.
         """
         if not os.path.exists(os.path.join(CACHE_DIR, self._img_fname)):
+            LOG.debug('Image %s not downloaded yet', self._img_fname)
             return False
 
+        LOG.info('Calculating checksum for "%s"', self._img_fname)
         expected_sum = None
-        # TODO: make the verbosity switch be dependent from verbosity of the
-        # script.
         fname = os.path.join(self._tmp, self._checksum_file)
         Run(['wget', self._checksum_url, '-q', '-O', fname])
 
@@ -867,11 +901,14 @@ class Fedora(Image):
                     break
 
         if not expected_sum:
-            raise BoxError('Cannot find provided cloud image')
+            LOG.fatal('Cannot find checksum for provided cloud image')
+            return False
 
         if os.path.exists(os.path.join(CACHE_DIR, self._img_fname)):
             cmd = ['sha256sum', os.path.join(CACHE_DIR, self._img_fname)]
             calulated_sum = Run(cmd).stdout.split(' ')[0]
+            LOG.details('Checksum for image: %s, expected: %s', calulated_sum,
+                        expected_sum)
             return calulated_sum == expected_sum
 
         return False
@@ -879,17 +916,18 @@ class Fedora(Image):
     def _download_image(self):
         if self._checksum():
             LOG.details('Image already downloaded: %s', self._img_fname)
-            return
+            return True
 
         fname = os.path.join(CACHE_DIR, self._img_fname)
         Run(['wget', '-q', self._img_url, '-O', fname])
 
         if not self._checksum():
             # TODO: make some retry mechanism?
-            raise BoxSysCommandError('Checksum for downloaded image differ '
-                                     'from expected.')
-        else:
-            LOG.info('Downloaded image %s', self._img_fname)
+            LOG.fatal('Checksum for downloaded image differ from expected')
+            return False
+
+        LOG.header('Downloaded image %s', self._img_fname)
+        return True
 
 
 DISTROS = {'ubuntu': {'username': 'ubuntu',
@@ -904,7 +942,7 @@ DISTROS = {'ubuntu': {'username': 'ubuntu',
                       'default_version': '34'}}
 
 
-def get_image(vbox, version, image='ubuntu', arch='amd64'):
+def get_image_object(vbox, version, image='ubuntu', arch='amd64'):
     release = None
     if image == 'fedora':
         release = FEDORA_RELEASE_MAP[version]
@@ -914,19 +952,23 @@ def get_image(vbox, version, image='ubuntu', arch='amd64'):
 
 class IsoImage:
     def __init__(self, conf):
-        self._tmp = tempfile.mkdtemp()
+        self._tmp = tempfile.mkdtemp(prefix='boxpy_')
         self.hostname = conf.hostname
         self._cloud_conf = conf.get_cloud_config()
 
     def get_generated_image(self):
-        self._create_cloud_image()
+        if not self._create_cloud_image():
+            return None
         return os.path.join(self._tmp, CLOUD_IMAGE)
 
     def cleanup(self):
+        LOG.info('Cleaning up temporary files from "%s"', self._tmp)
         Run(['rm', '-fr', self._tmp])
 
     def _create_cloud_image(self):
         # meta-data
+        LOG.header('Creating ISO image with cloud config')
+
         with open(os.path.join(self._tmp, 'meta-data'), 'w') as fobj:
             fobj.write(META_DATA_TPL
                        .substitute({'instance_id': str(uuid.uuid4()),
@@ -944,7 +986,8 @@ class IsoImage:
                 os.path.join(self._tmp, 'user-data'),
                 os.path.join(self._tmp, 'meta-data')]).returncode != 0:
             LOG.fatal('Cannot create ISO image for config drive')
-            raise BoxSysCommandError()
+            return False
+        return True
 
 
 LOG = FakeLogger(colors=True)
@@ -953,34 +996,43 @@ LOG = FakeLogger(colors=True)
 def vmcreate(args, conf=None):
 
     if not conf:
-        conf = Config(args)
+        try:
+            conf = Config(args)
+        except BoxNotFound:
+            return 7
+    LOG.header('Creating VM: %s', conf.name)
 
     vbox = VBoxManage(conf.name)
     if conf.port:
+        LOG.info('Trying to use provided port: %s', conf.port)
         used = vbox.is_port_in_use(conf.port)
         if used:
-            LOG.fatal('Error: Port %s is in use by "%s" VM.', conf.port, used)
-            return 11
+            LOG.fatal('Error: Port %s is in use by VM "%s"', conf.port, used)
+            return 1
 
     if not vbox.create(conf.cpus, conf.memory, conf.port):
-        LOG.fatal('Error creating virtual machine: %s', conf.name)
-        return 10
+        return 2
 
-    vbox.create_controller('IDE', 'ide')
-    vbox.create_controller('SATA', 'sata')
+    if not vbox.create_controller('IDE', 'ide'):
+        return 3
+    if not vbox.create_controller('SATA', 'sata'):
+        return 4
 
-    vbox.setextradata('distro', conf.distro)
-    vbox.setextradata('key', conf.key)
-    vbox.setextradata('hostname', conf.hostname)
-    vbox.setextradata('version', conf.version)
+    for key in ('distro', 'key', 'hostname', 'version'):
+        if not vbox.setextradata(key, getattr(conf, key)):
+            return 5
+
     if conf.user_data:
-        vbox.setextradata('user_data', conf.user_data)
+        if not vbox.setextradata('user_data', conf.user_data):
+            return 6
 
-    image = get_image(vbox, conf.version, image=conf.distro)
+    image = get_image_object(vbox, conf.version, image=conf.distro)
     path_to_disk = image.convert_to_vdi(conf.name + '.vdi', conf.disk_size)
 
     iso = IsoImage(conf)
     path_to_iso = iso.get_generated_image()
+    if not path_to_iso:
+        return 12
     vbox.setextradata('iso_path', path_to_iso)
     vbox.storageattach('SATA', 0, 'hdd', path_to_disk)
     vbox.storageattach('IDE', 1, 'dvddrive', path_to_iso)
@@ -1007,7 +1059,7 @@ def vmcreate(args, conf=None):
     try:
         while True:
             out = Run(cmd).stdout
-            LOG.debug2('Out: %s', out)
+            LOG.debug('Out: %s', out)
 
             if (not out) or ('status' in out and 'running' in out):
                 LOG.info('.', end='')
@@ -1015,15 +1067,14 @@ def vmcreate(args, conf=None):
                 time.sleep(3)
                 continue
 
-            LOG.info(' done.')
+            LOG.info(' done')
             break
         out = out.split(':')[1].strip()
         if out != 'done':
-            LOG.warning('Cloud init finished with "%s" status. You can log '
-                        'in and investigate.', out)
+            LOG.warning('Cloud init finished with "%s" status.', out)
 
     except KeyboardInterrupt:
-        LOG.warning('\nIterrupted, cleaning up.')
+        LOG.warning('\nIterrupted, cleaning up')
         iso.cleanup()
         image.cleanup()
         vbox.destroy()
@@ -1044,26 +1095,39 @@ def vmcreate(args, conf=None):
 
 
 def vmdestroy(args):
-    VBoxManage(args.name).destroy()
-    return 0
+    LOG.header('Removing VM: %s', args.name)
+    return VBoxManage(args.name).destroy()
 
 
 def vmlist(args):
+    if args.running:
+        LOG.header('Running VMs:')
+    else:
+        LOG.header('All VMs:')
     print(VBoxManage().vmlist(args.running, args.long).strip())
     return 0
 
 
 def vmrebuild(args):
+    LOG.header('Rebuilding VM: %s', args.name)
     vbox = VBoxManage(args.name)
-    conf = Config(args, vbox)
+    try:
+        conf = Config(args, vbox)
+    except BoxNotFound:
+        return 8
 
     vbox.poweroff(silent=True)
 
-    disk_path = vbox.get_disk_path()
+    try:
+        disk_path = vbox.get_disk_path()
+    except BoxError:
+        LOG.fatal('Cannot deal with multiple attached disks, perhaps you need '
+                  'to do this manually')
+        return 9
 
     if not disk_path:
         # no disks, return
-        return 1
+        return 10
 
     if not conf.disk_size:
         conf.disk_size = vbox.get_media_size(disk_path)
@@ -1080,7 +1144,11 @@ def shell_completion(args):
 
 def connect(args):
     vbox = VBoxManage(args.name)
-    conf = Config(args, vbox)
+    try:
+        conf = Config(args, vbox)
+    except BoxNotFound:
+        return 11
+
     return Run(['ssh', '-o', 'StrictHostKeyChecking=no',
                 '-o', 'UserKnownHostsFile=/dev/null',
                 '-i', conf.ssh_key_path[:-4],
