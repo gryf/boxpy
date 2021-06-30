@@ -226,8 +226,8 @@ class Run:
             LOG.debug2(result.stderr)
 
         self.returncode = result.returncode
-        self.stdout = result.stdout.strip()
-        self.stderr = result.stderr.strip()
+        self.stdout = result.stdout.strip() if result.stdout else ''
+        self.stderr = result.stderr.strip() if result.stderr else ''
 
 
 class BoxError(Exception):
@@ -782,8 +782,7 @@ class Image:
         self._img_fname = None
 
     def convert_to_vdi(self, disk_img, size):
-        LOG.info('Converting and resizing "%s", new size: %sMB', disk_img,
-                 size)
+        LOG.info('Converting and resizing "%s", new size: %s', disk_img, size)
         if not self._download_image():
             return None
         if not self._convert_to_raw():
@@ -1083,7 +1082,10 @@ def vmcreate(args, conf=None):
             break
         out = out.split(':')[1].strip()
         if out != 'done':
-            LOG.warning('Cloud init finished with "%s" status.', out)
+            cmd = cmd[:-1]
+            cmd.append('cloud-init status -l')
+            LOG.warning('Cloud init finished with "%s" status:\n%s', out,
+                        Run(cmd).stdout)
 
     except KeyboardInterrupt:
         LOG.warning('\nIterrupted, cleaning up')
