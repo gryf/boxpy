@@ -91,6 +91,7 @@ use it ad-hoc, or place on your ``.bashrc`` or whatever:
 Currently, following commands are available:
 
 - ``list`` - for quickly listing all/running VMs
+- ``info`` - to get summary about VM
 - ``destroy`` - that is probably obvious one
 - ``create`` - create new VM
 - ``rebuild`` - recreate specified VM
