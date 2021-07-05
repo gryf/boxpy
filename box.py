@@ -564,7 +564,6 @@ class VBoxManage:
 
         images = []
         for sc in gebtn('StorageController'):
-            name = sc.getAttribute('name')
             for ad in sc.getElementsByTagName('AttachedDevice'):
                 if not ad.getElementsByTagName('Image'):
                     continue
