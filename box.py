@@ -580,9 +580,11 @@ class VBoxManage:
 
         self.vm_info['media'] = images
 
+        # get ssh port
         if len(gebtn('Forwarding')):
-            fw = gebtn('Forwarding')[0].getAttribute('hostport')
-            self.vm_info['port'] = fw
+            for rule in gebtn('Forwarding'):
+                if rule.getAttribute('guestport') == '22':
+                    self.vm_info['port'] = rule.getAttribute('hostport')
 
         return self.vm_info
 
@@ -763,8 +765,8 @@ class VBoxManage:
             gebtn = dom.getElementsByTagName
 
             if len(gebtn('Forwarding')):
-                used_ports[vm_name] = (gebtn('Forwarding')[0]
-                                       .getAttribute('hostport'))
+                for rule in gebtn('Forwarding'):
+                    used_ports[vm_name] = rule.getAttribute('hostport')
         return used_ports
 
     def _get_vm_config(self):
