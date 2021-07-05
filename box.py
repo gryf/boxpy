@@ -133,8 +133,8 @@ _boxpy() {
             fi
             ;;
         create|rebuild)
-            items=(--cpus --disk-size --distro --key --memory --hostname
-                --port --config --version)
+            items=(--cpus --disk-size --distro --forwarding --key --memory
+                --hostname --port --config --version)
             if [[ ${prev} == ${cmd} ]]; then
                 if [[ ${cmd} = "rebuild" ]]; then
                     _vms_comp vms
@@ -332,8 +332,8 @@ class FakeLogger:
 
 
 class Config:
-    ATTRS = ('cpus', 'config', 'creator', 'disk_size', 'distro', 'hostname',
-             'key', 'memory', 'name', 'port', 'version')
+    ATTRS = ('cpus', 'config', 'creator', 'disk_size', 'distro', 'forwarding',
+             'hostname', 'key', 'memory', 'name', 'port', 'version')
 
     def __init__(self, args, vbox=None):
         self.advanced = None
@@ -341,6 +341,7 @@ class Config:
         self.cpus = None
         self.creator = None
         self.disk_size = None
+        self.forwarding = {}
         self.hostname = None
         self.key = None
         self.memory = None
@@ -1247,6 +1248,10 @@ def main():
                         help="Alternative user-data template filepath")
     create.add_argument('-d', '--distro', help="Image name. 'ubuntu' is "
                         "default")
+    create.add_argument('-f', '--forwarding', action='append', help="expose "
+                        "port from VM to the host. It should be in format "
+                        "'hostport:vmport'. this option can be used multiple "
+                        "times for multiple ports.")
     create.add_argument('-k', '--key', help="SSH key to be add to the config "
                         "drive. Default ~/.ssh/id_rsa")
     create.add_argument('-m', '--memory', help="amount of memory in "
@@ -1281,6 +1286,10 @@ def main():
     rebuild.add_argument('-c', '--config',
                          help="Alternative user-data template filepath")
     rebuild.add_argument('-d', '--distro', help="Image name.")
+    rebuild.add_argument('-f', '--forwarding', action='append', help="expose "
+                         "port from VM to the host. It should be in format "
+                         "'hostport:vmport'. this option can be used multiple "
+                         "times for multiple ports.")
     rebuild.add_argument('-k', '--key',
                          help='SSH key to be add to the config drive')
     rebuild.add_argument('-m', '--memory', help='amount of memory in '
