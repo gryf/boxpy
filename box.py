@@ -455,17 +455,23 @@ class Config:
         return ''.join(x for x in name if x.isalnum() or x == '-')
 
     def _combine_cc(self):
+        """
+        Read user custom cloud config (if present) and update config dict
+        """
+        if not self.user_data:
+            LOG.debug("No user data has been provided")
+            return
+
+        if not os.path.exists(self.user_data):
+            LOG.warning("Provided user_data: '%s' doesn't exists",
+                        self.user_data)
+            return
+
         conf = yaml.safe_load(USER_DATA)
 
-        # read user custom cloud config (if present) and update config dict
-        if self.user_data:
-            if os.path.exists(self.user_data):
-                with open(self.user_data) as fobj:
-                    custom_conf = yaml.safe_load(fobj)
-                    conf = self._update(conf, custom_conf)
-            else:
-                LOG.warning("Provided user_data: '%s' doesn't exists",
-                            self.user_data)
+        with open(self.user_data) as fobj:
+            custom_conf = yaml.safe_load(fobj)
+            conf = self._update(conf, custom_conf)
 
         # update the attributes with data from read user cloud config
         for key, val in conf.get('boxpy_data', {}).items():
