@@ -478,6 +478,11 @@ class Config:
         for key, val in conf.get('boxpy_data', {}).items():
             if not val:
                 continue
+            if key == 'forwarding':
+                for ports in val:
+                    k, v = ports.split(':')
+                    self.forwarding[k] = v
+                continue
             setattr(self, key, str(val))
 
         # remove boxpy_data since it will be not needed on the guest side
