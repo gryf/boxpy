@@ -377,6 +377,11 @@ class Config:
             val = getattr(args, attr, None)
             if not val:
                 continue
+            if attr == 'forwarding':
+                for ports in val:
+                    key, value = ports.split(':')
+                    self.forwarding[key] = value
+                continue
             setattr(self, attr, str(val))
 
         # set distribution and version if not specified by user
@@ -589,8 +594,14 @@ class VBoxManage:
         # get ssh port
         if len(gebtn('Forwarding')):
             for rule in gebtn('Forwarding'):
-                if rule.getAttribute('guestport') == '22':
+                if rule.getAttribute('name') == 'boxpyssh':
                     self.vm_info['port'] = rule.getAttribute('hostport')
+                else:
+                    if not self.vm_info.get('forwarding'):
+                        self.vm_info['forwarding'] = {}
+                    hostport = rule.getAttribute('hostport')
+                    guestport = rule.getAttribute('guestport')
+                    self.vm_info['forwarding'][hostport] = guestport
 
         return self.vm_info
 
@@ -643,14 +654,20 @@ class VBoxManage:
         if not conf.port:
             port = self._find_unused_port()
 
-        if Run(['vboxmanage', 'modifyvm', self.name_or_uuid,
+        cmd = ['vboxmanage', 'modifyvm', self.name_or_uuid,
                 '--memory', str(memory),
-                '--cpus', str(cpus),
+                '--cpus', str(conf.cpus),
                 '--boot1', 'disk',
                 '--acpi', 'on',
                 '--audio', 'none',
                 '--nic1', 'nat',
-                '--natpf1', f'guestssh,tcp,,{port},,22']).returncode != 0:
+                '--natpf1', f'boxpyssh,tcp,,{port},,22']
+        for count, (hostport, vmport) in enumerate(conf.forwarding.items(),
+                                                   start=1):
+            cmd.extend(['--natpf1', f'custom-pf-{count},tcp,,{hostport},'
+                        f',{vmport}'])
+
+        if Run(cmd).returncode != 0:
             LOG.fatal(f'Cannot modify VM "{self.name_or_uuid}"')
             raise BoxVBoxFailure()
 
@@ -1178,6 +1195,15 @@ def vminfo(args):
 
     if 'port' in info:
         LOG.info('SSH port:\t\t%s', info['port'])
+
+    if 'forwarding' in info:
+        LOG.info('Additional port mappings:')
+        ports = []
+        for hostport, vmport in info['forwarding'].items():
+            ports.append(f"  {hostport}:{vmport}")
+        ports.sort()
+        for line in ports:
+            LOG.info(line)
 
 
 def vmrebuild(args):
