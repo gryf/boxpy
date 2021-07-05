@@ -623,9 +623,9 @@ class VBoxManage:
             LOG.fatal('Removing VM "%s" failed', self.name_or_uuid)
             return 7
 
-    def create(self, cpus, memory, port=None):
+    def create(self, conf):
         self.uuid = None
-        memory = convert_to_mega(memory)
+        memory = convert_to_mega(conf.memory)
 
         out = Run(['vboxmanage', 'createvm', '--name', self.name_or_uuid,
                    '--register'])
@@ -640,7 +640,7 @@ class VBoxManage:
         if not self.uuid:
             raise BoxVBoxFailure(f'Cannot create VM "{self.name_or_uuid}".')
 
-        if not port:
+        if not conf.port:
             port = self._find_unused_port()
 
         if Run(['vboxmanage', 'modifyvm', self.name_or_uuid,
@@ -1031,7 +1031,7 @@ def vmcreate(args, conf=None):
             LOG.fatal('Error: Port %s is in use by VM "%s"', conf.port, used)
             return 1
 
-    if not vbox.create(conf.cpus, conf.memory, conf.port):
+    if not vbox.create(conf):
         return 2
 
     if not vbox.create_controller('IDE', 'ide'):
