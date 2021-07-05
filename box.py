@@ -454,6 +454,8 @@ class Config:
         for key, val in conf['boxpy_data'].items():
             setattr(self, key, str(val))
 
+        self._conf = conf
+
     def _normalize_name(self):
         name = self.name.replace(' ', '-')
         name = name.encode('ascii', errors='ignore')
