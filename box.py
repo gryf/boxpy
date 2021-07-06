@@ -608,7 +608,7 @@ class VBoxManage:
 
         return self.vm_info
 
-    def poweroff(self, silent=False):
+    def poweroff(self):
         Run(['vboxmanage', 'controlvm', self.name_or_uuid, 'poweroff'])
 
     def vmlist(self, only_running=False, long_list=False):
@@ -626,7 +626,7 @@ class VBoxManage:
                       self.name_or_uuid)
             return 4
 
-        self.poweroff(silent=True)
+        self.poweroff()
         time.sleep(1)  # wait a bit, for VM shutdown to complete
         # detach cloud image.
         self.storageattach('IDE', 1, 'dvddrive', 'none')
@@ -1214,7 +1214,7 @@ def vmrebuild(args):
     except BoxNotFound:
         return 8
 
-    vbox.poweroff(silent=True)
+    vbox.poweroff()
 
     try:
         disk_path = vbox.get_disk_path()
