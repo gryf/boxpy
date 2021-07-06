@@ -516,6 +516,7 @@ class VBoxManage:
     def __init__(self, name_or_uuid=None):
         self.name_or_uuid = name_or_uuid
         self.vm_info = {}
+        self.uuid = None
 
     def get_vm_base_path(self):
         path = self._get_vm_config()
@@ -582,14 +583,14 @@ class VBoxManage:
             self.vm_info[key] = val
 
         images = []
-        for sc in gebtn('StorageController'):
-            for ad in sc.getElementsByTagName('AttachedDevice'):
-                if not ad.getElementsByTagName('Image'):
+        for storage in gebtn('StorageController'):
+            for adev in storage.getElementsByTagName('AttachedDevice'):
+                if not adev.getElementsByTagName('Image'):
                     continue
-                image = ad.getElementsByTagName('Image')[0]
-                type_ = ad.getAttribute('type')
-                uuid = image.getAttribute('uuid')[1:-1]
-                images.append({'type': type_, 'uuid': uuid})
+                image = adev.getElementsByTagName('Image')[0]
+                type_ = adev.getAttribute('type')
+                uuid_ = image.getAttribute('uuid')[1:-1]
+                images.append({'type': type_, 'uuid': uuid_})
 
         self.vm_info['media'] = images
 
@@ -637,7 +638,6 @@ class VBoxManage:
             return 7
 
     def create(self, conf):
-        self.uuid = None
         memory = convert_to_mega(conf.memory)
 
         out = Run(['vboxmanage', 'createvm', '--name', self.name_or_uuid,
@@ -657,13 +657,13 @@ class VBoxManage:
             port = self._find_unused_port()
 
         cmd = ['vboxmanage', 'modifyvm', self.name_or_uuid,
-                '--memory', str(memory),
-                '--cpus', str(conf.cpus),
-                '--boot1', 'disk',
-                '--acpi', 'on',
-                '--audio', 'none',
-                '--nic1', 'nat',
-                '--natpf1', f'boxpyssh,tcp,,{port},,22']
+               '--memory', str(memory),
+               '--cpus', str(conf.cpus),
+               '--boot1', 'disk',
+               '--acpi', 'on',
+               '--audio', 'none',
+               '--nic1', 'nat',
+               '--natpf1', f'boxpyssh,tcp,,{port},,22']
         for count, (hostport, vmport) in enumerate(conf.forwarding.items(),
                                                    start=1):
             cmd.extend(['--natpf1', f'custom-pf-{count},tcp,,{hostport},'
@@ -782,14 +782,14 @@ class VBoxManage:
             if info.returncode != 0:
                 continue
 
-            for line in info.stdout.split('\n'):
-                if line.startswith('Config file:'):
-                    config = line.split('Config ' 'file:')[1].strip()
+            for info_line in info.stdout.split('\n'):
+                if info_line.startswith('Config file:'):
+                    config = info_line.split('Config ' 'file:')[1].strip()
 
             dom = xml.dom.minidom.parse(config)
             gebtn = dom.getElementsByTagName
 
-            if len(gebtn('Forwarding')):
+            if gebtn('Forwarding'):
                 for rule in gebtn('Forwarding'):
                     used_ports[vm_name] = rule.getAttribute('hostport')
         return used_ports
@@ -799,9 +799,7 @@ class VBoxManage:
             return self.vm_info['config_file']
 
         self.get_vm_info()
-
-        if self.vm_info.get('config_file'):
-            return self.vm_info['config_file']
+        return self.vm_info['config_file']
 
 
 class Image:
