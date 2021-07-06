@@ -653,8 +653,7 @@ class VBoxManage:
         if not self.uuid:
             raise BoxVBoxFailure(f'Cannot create VM "{self.name_or_uuid}".')
 
-        if not conf.port:
-            port = self._find_unused_port()
+        port = conf.port if conf.port else self._find_unused_port()
 
         cmd = ['vboxmanage', 'modifyvm', self.name_or_uuid,
                '--memory', str(memory),
