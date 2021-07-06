@@ -723,8 +723,8 @@ class VBoxManage:
             else:
                 LOG.fatal('Attaching %s to VM "%s" has failed', image,
                           self.name_or_uuid)
-                return False
-            return True
+            return False
+        return True
 
     def poweron(self):
         if Run(['vboxmanage', 'startvm', self.name_or_uuid, '--type',
