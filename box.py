@@ -169,7 +169,7 @@ _boxpy() {
             fi
             ;;
         list)
-            items=(--long --running)
+            items=(--long --running --run-by-boxpy)
             _get_excluded_items "${items[@]}"
             COMPREPLY=( $(compgen -W "$result" -- ${cur}) )
             ;;
@@ -611,10 +611,24 @@ class VBoxManage:
     def poweroff(self):
         Run(['vboxmanage', 'controlvm', self.name_or_uuid, 'poweroff'])
 
-    def vmlist(self, only_running=False, long_list=False):
+    def vmlist(self, only_running=False, long_list=False, only_boxpy=False):
         subcommand = 'runningvms' if only_running else 'vms'
-        long_list = '-l' if long_list else '-s'
-        return Run(['vboxmanage', 'list', subcommand, long_list]).stdout
+        machines = {}
+        for line in Run(['vboxmanage', 'list', subcommand]).stdout.split('\n'):
+            if not line:
+                continue
+            _, name, vm_uuid = line.split('"')
+            vm_uuid = vm_uuid.split('{')[1][:-1]
+            info = line
+            if only_boxpy:
+                info_ = VBoxManage(vm_uuid).get_vm_info()
+                if info_.get('creator') != 'boxpy':
+                    continue
+            if long_list:
+                info = "\n".join(Run(['vboxmanage', 'showvminfo',
+                                      info]).stdout.split('\n'))
+            machines[name] = info
+        return machines
 
     def get_running_vms(self):
         return Run(['vboxmanage', 'list', 'runningvms']).stdout
@@ -1143,11 +1157,22 @@ def vmdestroy(args):
 
 
 def vmlist(args):
+    vms = VBoxManage().vmlist(args.running, args.long, args.run_by_boxpy)
+
     if args.running:
-        LOG.header('Running VMs:')
+        if args.run_by_boxpy:
+            LOG.header('Running VMs created by boxpy:')
+        else:
+            LOG.header('Running VMs:')
     else:
-        LOG.header('All VMs:')
-    print(VBoxManage().vmlist(args.running, args.long).strip())
+        if args.run_by_boxpy:
+            LOG.header('All VMs created by boxpy:')
+        else:
+            LOG.header('All VMs:')
+
+    for key in sorted(vms):
+        LOG.info(vms[key])
+
     return 0
 
 
@@ -1302,6 +1327,8 @@ def main():
     destroy.set_defaults(func=vmdestroy)
 
     list_vms = subparsers.add_parser('list', help='list VMs')
+    list_vms.add_argument('-b', '--run-by-boxpy', action='store_true',
+                          help='show only those machines created by boxpy')
     list_vms.add_argument('-l', '--long', action='store_true',
                           help='show detailed information '
                           'about VMs')
