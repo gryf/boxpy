@@ -98,8 +98,8 @@ Currently, following commands are available:
 - ``ssh`` - connect to the VM using ssh
 - ``completion`` - as described above
 
-All of the commands have a range of options, and can be examined it by using
-``--help``.
+All of the commands have a range of options, and can be examined by using
+``--help`` option.
 
 What is more interesting though, is the fact, that you can pass your own
 `cloud-init`_ yaml file, so that VM can be provisioned in easy way.

@@ -133,8 +133,8 @@ _boxpy() {
             fi
             ;;
         create|rebuild)
-            items=(--cpus --disk-size --distro --forwarding --key --memory
-                --hostname --port --config --version)
+            items=(--cpus --disable-nested --disk-size --distro --forwarding
+                --key --memory --hostname --port --config --version)
             if [[ ${prev} == ${cmd} ]]; then
                 if [[ ${cmd} = "rebuild" ]]; then
                     _vms_comp vms
@@ -332,14 +332,16 @@ class FakeLogger:
 
 
 class Config:
-    ATTRS = ('cpus', 'config', 'creator', 'disk_size', 'distro', 'forwarding',
-             'hostname', 'key', 'memory', 'name', 'port', 'version')
+    ATTRS = ('cpus', 'config', 'creator', 'disable_nested', 'disk_size',
+             'distro', 'forwarding', 'hostname', 'key', 'memory', 'name',
+             'port', 'version')
 
     def __init__(self, args, vbox=None):
         self.advanced = None
         self.distro = None
         self.cpus = None
         self.creator = None
+        self.disable_nested = 'False'
         self.disk_size = None
         self.forwarding = {}
         self.hostname = None
@@ -685,6 +687,13 @@ class VBoxManage:
         if Run(cmd).returncode != 0:
             LOG.fatal(f'Cannot modify VM "{self.name_or_uuid}"')
             raise BoxVBoxFailure()
+
+        if conf.disable_nested == 'False':
+            if Run(['vboxmanage', 'modifyvm', self.name_or_uuid,
+                    '--nested-hw-virt', 'on']).returncode != 0:
+                LOG.fatal(f'Cannot set nested virtualization for VM '
+                          f'"{self.name_or_uuid}"')
+                raise BoxVBoxFailure()
 
         return self.uuid
 
@@ -1069,7 +1078,7 @@ def vmcreate(args, conf=None):
     if not vbox.create_controller('SATA', 'sata'):
         return 4
 
-    for key in ('distro', 'key', 'hostname', 'version'):
+    for key in ('distro', 'hostname', 'key', 'version'):
         if not vbox.setextradata(key, getattr(conf, key)):
             return 5
 
@@ -1315,6 +1324,8 @@ def main():
                         help="VM hostname. Default same as vm name")
     create.add_argument('-p', '--port', help="set ssh port for VM, default "
                         "random port from range 2000-2999")
+    create.add_argument('-r', '--disable-nested', action='store_true',
+                        help="disable nested virtualization")
     create.add_argument('-s', '--disk-size', help="disk size to be expanded "
                         "to. By default to 10GB")
     create.add_argument('-u', '--cpus', type=int, help="amount of CPUs to be "
@@ -1353,6 +1364,8 @@ def main():
                          'Megabytes')
     rebuild.add_argument('-n', '--hostname', help="set VM hostname")
     rebuild.add_argument('-p', '--port', help="set ssh port for VM")
+    rebuild.add_argument('-r', '--disable-nested', action="store_true",
+                         help="disable nested virtualization")
     rebuild.add_argument('-s', '--disk-size',
                          help='disk size to be expanded to')
     rebuild.add_argument('-u', '--cpus', type=int,
