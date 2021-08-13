@@ -16,6 +16,8 @@ import xml.dom.minidom
 import yaml
 
 
+__version__ = "1.0"
+
 CACHE_DIR = os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
 CLOUD_IMAGE = "ci.iso"
 FEDORA_RELEASE_MAP = {'32': '1.6', '33': '1.2', '34': '1.2'}
@@ -1303,6 +1305,8 @@ def main():
     group.add_argument('-q', '--quiet', action='count', default=0,
                        help='suppress output. Adding more "q" will make '
                        'boxpy to shut up.')
+    parser.add_argument('-V', '--version', action='store_true',
+                        help="show boxpy version and exit")
 
     subparsers = parser.add_subparsers(help='supported commands')
 
@@ -1393,6 +1397,10 @@ def main():
     args = parser.parse_args()
 
     LOG.set_verbose(args.verbose, args.quiet)
+
+    if args.version:
+        LOG.info(f'boxpy {__version__}')
+        parser.exit()
 
     if hasattr(args, 'func'):
         return args.func(args)
