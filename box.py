@@ -1238,6 +1238,9 @@ def vminfo(args):
         for line in ports:
             LOG.info(line)
 
+    if 'user_data' in info:
+        LOG.info(f'User data file path:\t{info["user_data"]}')
+
 
 def vmrebuild(args):
     LOG.header('Rebuilding VM: %s', args.name)
