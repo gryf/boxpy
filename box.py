@@ -136,7 +136,7 @@ _boxpy() {
             ;;
         create|rebuild)
             items=(--cpus --disable-nested --disk-size --distro --forwarding
-                --key --memory --hostname --port --config --version)
+                --key --memory --hostname --port --config --version --type)
             if [[ ${prev} == ${cmd} ]]; then
                 if [[ ${cmd} = "rebuild" ]]; then
                     _vms_comp vms
@@ -157,6 +157,10 @@ _boxpy() {
                         ;;
                     --distro)
                         COMPREPLY=( $(compgen -W "ubuntu fedora" -- ${cur}) )
+                        ;;
+                    --type)
+                        COMPREPLY=( $(compgen -W "gui headless sdl separate" \
+                            -- ${cur}) )
                         ;;
                     --*)
                         COMPREPLY=( )
@@ -751,9 +755,9 @@ class VBoxManage:
             return False
         return True
 
-    def poweron(self):
+    def poweron(self, type_='headless'):
         if Run(['vboxmanage', 'startvm', self.name_or_uuid, '--type',
-                'headless']).returncode != 0:
+                type_]).returncode != 0:
             LOG.fatal('Failed to start: %s', self.name_or_uuid)
             raise BoxVBoxFailure()
 
@@ -1109,7 +1113,7 @@ def vmcreate(args, conf=None):
                 vbox.add_nic(key, val)
 
     # start the VM and wait for cloud-init to finish
-    vbox.poweron()
+    vbox.poweron(args.type)
     # give VBox some time to actually change the state of the VM before query
     time.sleep(3)
 
@@ -1335,6 +1339,9 @@ def main():
                         help="disable nested virtualization")
     create.add_argument('-s', '--disk-size', help="disk size to be expanded "
                         "to. By default to 10GB")
+    create.add_argument('-t', '--type', default='headless',
+                        help="run type, headless by default.",
+                        choices=['gui', 'headless', 'sdl', 'separate'])
     create.add_argument('-u', '--cpus', type=int, help="amount of CPUs to be "
                         "configured. Default 1.")
     create.add_argument('-v', '--version', help=f"distribution version. "
@@ -1375,6 +1382,9 @@ def main():
                          help="disable nested virtualization")
     rebuild.add_argument('-s', '--disk-size',
                          help='disk size to be expanded to')
+    rebuild.add_argument('-t', '--type', default='headless',
+                         help="run type, headless by default.",
+                         choices=['gui', 'headless', 'sdl', 'separate'])
     rebuild.add_argument('-u', '--cpus', type=int,
                          help='amount of CPUs to be configured')
     rebuild.add_argument('-v', '--version', help='distribution version')
