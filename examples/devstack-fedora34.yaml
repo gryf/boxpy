@@ -1,3 +1,5 @@
+# Note, that cloud init will fail, due to old cloudinit package, which module
+# cc_keys_to_console doesn't recognize skipping option. Just ignore this error.
 package_update: true
 packages:
   - bash-completion
@@ -12,7 +14,6 @@ packages:
 write_files:
   - path: /tmp/local.conf
     permissions: '0644'
-    owner: fedora:fedora
     content: |
       [[local|localrc]]
       ADMIN_PASSWORD=pass
@@ -33,4 +34,4 @@ boxpy_data:
   memory: 4GB
   disk_size: 10GB
   distro: fedora
-  version: 32
+  version: 34
