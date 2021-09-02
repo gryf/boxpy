@@ -1340,7 +1340,7 @@ def main():
     create.add_argument('-s', '--disk-size', help="disk size to be expanded "
                         "to. By default to 10GB")
     create.add_argument('-t', '--type', default='headless',
-                        help="run type, headless by default.",
+                        help="VM run type, headless by default.",
                         choices=['gui', 'headless', 'sdl', 'separate'])
     create.add_argument('-u', '--cpus', type=int, help="amount of CPUs to be "
                         "configured. Default 1.")
@@ -1383,7 +1383,7 @@ def main():
     rebuild.add_argument('-s', '--disk-size',
                          help='disk size to be expanded to')
     rebuild.add_argument('-t', '--type', default='headless',
-                         help="run type, headless by default.",
+                         help="VM run type, headless by default.",
                          choices=['gui', 'headless', 'sdl', 'separate'])
     rebuild.add_argument('-u', '--cpus', type=int,
                          help='amount of CPUs to be configured')
