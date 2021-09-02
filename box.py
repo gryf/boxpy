@@ -1066,6 +1066,10 @@ def vmcreate(args, conf=None):
             conf = Config(args)
         except BoxNotFound:
             return 7
+        except yaml.YAMLError:
+            LOG.fatal(f'Cannot read or parse file `{args.config}` as YAML '
+                      f'file')
+            return 14
     LOG.header('Creating VM: %s', conf.name)
 
     vbox = VBoxManage(conf.name)
@@ -1255,6 +1259,10 @@ def vmrebuild(args):
         conf = Config(args, vbox)
     except BoxNotFound:
         return 8
+    except yaml.YAMLError:
+        LOG.fatal(f'Cannot read or parse file `{args.config}` as YAML '
+                  f'file')
+        return 15
 
     vbox.poweroff()
 
@@ -1288,6 +1296,10 @@ def connect(args):
         conf = Config(args, vbox)
     except BoxNotFound:
         return 11
+    except yaml.YAMLError:
+        LOG.fatal(f'Cannot read or parse file `{args.config}` as YAML '
+                  f'file.')
+        return 16
 
     return Run(['ssh', '-o', 'StrictHostKeyChecking=no',
                 '-o', 'UserKnownHostsFile=/dev/null',
