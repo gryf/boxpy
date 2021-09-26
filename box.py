@@ -1420,7 +1420,7 @@ def main():
 
     LOG.set_verbose(args.verbose, args.quiet)
 
-    if not getattr(args, 'func') and args.version:
+    if 'func' not in args and args.version:
         LOG.info(f'boxpy {__version__}')
         parser.exit()
 
