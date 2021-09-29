@@ -31,7 +31,6 @@ write_files:
               - 192.168.10.11/24
   - path: /tmp/local.conf
     permissions: '0644'
-    owner: ubuntu:ubuntu
     content: |
       [[local|localrc]]
       disable_all_services
