@@ -4,6 +4,7 @@ import argparse
 import collections.abc
 import os
 import random
+import re
 import shutil
 import string
 import subprocess
@@ -22,7 +23,8 @@ CACHE_DIR = os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
 CLOUD_IMAGE = "ci.iso"
 FEDORA_RELEASE_MAP = {'32': '1.6', '33': '1.2', '34': '1.2'}
 TYPE_MAP = {'HardDisk': 'disk', 'DVD': 'dvd', 'Floppy': 'floppy'}
-DISTRO_MAP = {'ubuntu': 'Ubuntu', 'fedora': 'Fedora'}
+DISTRO_MAP = {'ubuntu': 'Ubuntu', 'fedora': 'Fedora',
+              'centos': 'Centos Stream'}
 META_DATA_TPL = string.Template('''\
 instance-id: $instance_id
 local-hostname: $vmhostname
@@ -156,7 +158,8 @@ _boxpy() {
                         _ssh_identityfile
                         ;;
                     --distro)
-                        COMPREPLY=( $(compgen -W "ubuntu fedora" -- ${cur}) )
+                        COMPREPLY=( $(compgen -W "ubuntu fedora centos" \
+                                -- ${cur}) )
                         ;;
                     --type)
                         COMPREPLY=( $(compgen -W "gui headless sdl separate" \
@@ -962,6 +965,54 @@ class Fedora(Image):
         return expected_sum
 
 
+class CentosStream(Image):
+    URL = "https://cloud.centos.org/centos/%s-stream/%s/images/%s"
+    IMG = '.*(CentOS-Stream-GenericCloud-%s-[0-9]+\.[0-9].%s.qcow2).*'
+    CHKS = "CHECKSUM"
+
+    def __init__(self, vbox, version, arch, release):
+        super().__init__(vbox, version, arch, release)
+        self._checksum_file = '%s-centos-stream-%s-%s' % (self.CHKS, version,
+                                                          arch)
+        self._checksum_url = self.URL % (version, arch, self.CHKS)
+        # there is assumption, that we always need latest relese for specific
+        # version and architecture.
+        self._img_fname = self._get_image_name(version, arch)
+        self._img_url = self.URL % (version, arch, self._img_fname)
+
+    def _get_image_name(self, version, arch):
+        Run(['wget', self._checksum_url, '-q', '-O', self._checksum_file])
+
+        pat = re.compile(self.IMG % (version, arch))
+
+        images = []
+        with open(self._checksum_file) as fobj:
+            for line in fobj.read().strip().split('\n'):
+                line = line.strip()
+                if line.startswith('#'):
+                    continue
+                match = pat.match(line)
+                if match and match.groups():
+                    images.append(match.groups()[0])
+
+        images.reverse()
+        if images:
+            return images[0]
+
+    def _get_checksum(self, fname):
+        expected_sum = None
+        Run(['wget', self._checksum_url, '-q', '-O', fname])
+
+        with open(fname) as fobj:
+            for line in fobj.readlines():
+                if line.startswith('#'):
+                    continue
+                if self._img_fname in line:
+                    expected_sum = line.split('=')[1].strip()
+                    break
+        return expected_sum
+
+
 DISTROS = {'ubuntu': {'username': 'ubuntu',
                       'realname': 'ubuntu',
                       'img_class': Ubuntu,
@@ -971,7 +1022,12 @@ DISTROS = {'ubuntu': {'username': 'ubuntu',
                       'realname': 'fedora',
                       'img_class': Fedora,
                       'amd64': 'x86_64',
-                      'default_version': '34'}}
+                      'default_version': '34'},
+           'centos': {'username': 'centos',
+                      'realname': 'centos',
+                      'img_class': CentosStream,
+                      'amd64': 'x86_64',
+                      'default_version': '8'}}
 
 
 def get_image_object(vbox, version, image='ubuntu', arch='amd64'):

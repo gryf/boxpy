@@ -2,8 +2,8 @@
 box.py
 ======
 
-Box.py is a simple automation tool meant to run Ubuntu or Fedora cloud images
-on top of VirtualBox.
+Box.py is a simple automation tool meant to run Ubuntu, Fedora or Centos Stream
+cloud images on top of VirtualBox.
 
 What it does is simply download official cloud image, set up VM, tweak it up
 and do the initial pre-configuration using generated config drive.
