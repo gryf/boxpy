@@ -865,21 +865,6 @@ class Image:
             return False
         return True
 
-    def _download_image(self):
-        raise NotImplementedError()
-
-
-class Ubuntu(Image):
-    URL = "https://cloud-images.ubuntu.com/releases/%s/release/%s"
-    IMG = "ubuntu-%s-server-cloudimg-%s.img"
-
-    def __init__(self, vbox, version, arch, release):
-        super().__init__(vbox, version, arch, release)
-        self._img_fname = self.IMG % (version, arch)
-        self._img_url = self.URL % (version, self._img_fname)
-        self._checksum_file = 'SHA256SUMS'
-        self._checksum_url = self.URL % (version, self._checksum_file)
-
     def _checksum(self):
         """
         Get and check checkusm for downloaded image. Return True if the
@@ -890,15 +875,8 @@ class Ubuntu(Image):
             return False
 
         LOG.info('Calculating checksum for "%s"', self._img_fname)
-        expected_sum = None
         fname = os.path.join(self._tmp, self._checksum_file)
-        Run(['wget', self._checksum_url, '-q', '-O', fname])
-
-        with open(fname) as fobj:
-            for line in fobj.readlines():
-                if self._img_fname in line:
-                    expected_sum = line.split(' ')[0]
-                    break
+        expected_sum = self._get_checksum(fname)
 
         if not expected_sum:
             LOG.fatal('Cannot find checksum for provided cloud image')
@@ -930,6 +908,32 @@ class Ubuntu(Image):
         LOG.header('Downloaded image %s', self._img_fname)
         return True
 
+    def _get_checksum(self, fname):
+        raise NotImplementedError()
+
+
+class Ubuntu(Image):
+    URL = "https://cloud-images.ubuntu.com/releases/%s/release/%s"
+    IMG = "ubuntu-%s-server-cloudimg-%s.img"
+
+    def __init__(self, vbox, version, arch, release):
+        super().__init__(vbox, version, arch, release)
+        self._img_fname = self.IMG % (version, arch)
+        self._img_url = self.URL % (version, self._img_fname)
+        self._checksum_file = 'SHA256SUMS'
+        self._checksum_url = self.URL % (version, self._checksum_file)
+
+    def _get_checksum(self, fname):
+        expected_sum = None
+        Run(['wget', self._checksum_url, '-q', '-O', fname])
+        with open(fname) as fobj:
+            for line in fobj.readlines():
+                if self._img_fname in line:
+                    expected_sum = line.split(' ')[0]
+                    break
+
+        return expected_sum
+
 
 class Fedora(Image):
     URL = ("https://download.fedoraproject.org/pub/fedora/linux/releases/%s/"
@@ -944,18 +948,8 @@ class Fedora(Image):
         self._checksum_file = self.CHKS % (version, release, arch)
         self._checksum_url = self.URL % (version, arch, self._checksum_file)
 
-    def _checksum(self):
-        """
-        Get and check checkusm for downloaded image. Return True if the
-        checksum is correct, False otherwise.
-        """
-        if not os.path.exists(os.path.join(CACHE_DIR, self._img_fname)):
-            LOG.debug('Image %s not downloaded yet', self._img_fname)
-            return False
-
-        LOG.info('Calculating checksum for "%s"', self._img_fname)
+    def _get_checksum(self, fname):
         expected_sum = None
-        fname = os.path.join(self._tmp, self._checksum_file)
         Run(['wget', self._checksum_url, '-q', '-O', fname])
 
         with open(fname) as fobj:
@@ -965,35 +959,7 @@ class Fedora(Image):
                 if self._img_fname in line:
                     expected_sum = line.split('=')[1].strip()
                     break
-
-        if not expected_sum:
-            LOG.fatal('Cannot find checksum for provided cloud image')
-            return False
-
-        if os.path.exists(os.path.join(CACHE_DIR, self._img_fname)):
-            cmd = ['sha256sum', os.path.join(CACHE_DIR, self._img_fname)]
-            calulated_sum = Run(cmd).stdout.split(' ')[0]
-            LOG.details('Checksum for image: %s, expected: %s', calulated_sum,
-                        expected_sum)
-            return calulated_sum == expected_sum
-
-        return False
-
-    def _download_image(self):
-        if self._checksum():
-            LOG.details('Image already downloaded: %s', self._img_fname)
-            return True
-
-        fname = os.path.join(CACHE_DIR, self._img_fname)
-        Run(['wget', '-q', self._img_url, '-O', fname])
-
-        if not self._checksum():
-            # TODO: make some retry mechanism?
-            LOG.fatal('Checksum for downloaded image differ from expected')
-            return False
-
-        LOG.header('Downloaded image %s', self._img_fname)
-        return True
+        return expected_sum
 
 
 DISTROS = {'ubuntu': {'username': 'ubuntu',
