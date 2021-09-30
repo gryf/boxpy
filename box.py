@@ -1150,7 +1150,7 @@ def vmcreate(args, conf=None):
            '-o', 'ConnectTimeout=2',
            '-i', conf.ssh_key_path[:-4],
            f'ssh://{DISTROS[conf.distro]["username"]}'
-           f'@localhost:{vbox.vm_info["port"]}', 'cloud-init status']
+           f'@localhost:{vbox.vm_info["port"]}', 'sudo cloud-init status']
     try:
         while True:
             out = Run(cmd).stdout
