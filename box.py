@@ -1193,7 +1193,12 @@ def vmcreate(args, conf=None):
 
 
 def vmdestroy(args):
-    LOG.header('Removing VM: %s', args.name)
+    vbox = VBoxManage(args.name)
+    if not vbox.get_vm_info():
+        LOG.fatal(f'Cannot remove VM "{args.name}" - it doesn\'t exists.')
+        return 18
+    else:
+        LOG.header('Removing VM: %s', args.name)
     return VBoxManage(args.name).destroy()
 
 
@@ -1220,6 +1225,10 @@ def vmlist(args):
 def vminfo(args):
     vbox = VBoxManage(args.name)
     info = vbox.get_vm_info()
+    if not info:
+        LOG.fatal(f'Cannot show details of VM "{args.name}" - '
+                  f'it doesn\'t exists.')
+        return 19
 
     LOG.header('Details for VM: %s', args.name)
     LOG.info('Creator:\t\t%s', info.get('creator', 'unknown/manual'))
@@ -1275,8 +1284,13 @@ def vminfo(args):
 
 
 def vmrebuild(args):
-    LOG.header('Rebuilding VM: %s', args.name)
     vbox = VBoxManage(args.name)
+    if not vbox.get_vm_info():
+        LOG.fatal(f'Cannot rebuild VM "{args.name}" - it doesn\'t exists.')
+        return 20
+    else:
+        LOG.header('Rebuilding VM: %s', args.name)
+
     try:
         conf = Config(args, vbox)
     except BoxNotFound:
@@ -1314,6 +1328,10 @@ def shell_completion(args):
 
 def connect(args):
     vbox = VBoxManage(args.name)
+    if not vbox.get_vm_info():
+        LOG.fatal(f'No machine has been found with a name `{args.name}`.')
+        return 17
+
     try:
         conf = Config(args, vbox)
     except BoxNotFound:
