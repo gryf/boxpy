@@ -637,7 +637,7 @@ class VBoxManage:
                     continue
             if long_list:
                 info = "\n".join(Run(['vboxmanage', 'showvminfo',
-                                      info]).stdout.split('\n'))
+                                      name]).stdout.split('\n'))
             machines[name] = info
         return machines
 
@@ -1217,6 +1217,8 @@ def vmlist(args):
             LOG.header('All VMs:')
 
     for key in sorted(vms):
+        if args.long:
+            LOG.header(f"\n{key}")
         LOG.info(vms[key])
 
     return 0
