@@ -19,6 +19,7 @@ Requirements
 - Python 3.x
 
   - `pyyaml`_
+  - `requests`_
 
 - Virtualbox (obviously)
 - ``mkisofs`` or ``genisoimage`` command for generating iso image
@@ -140,11 +141,20 @@ pass filenames to the custom config, instead of filling up
        permissions: '0644'
        filename: /path/to/local/file.txt
 
-during processing this file, boxpy will look for ``filename`` key in the yaml
-file for the ``write_files`` sections, and it will remove that key, read the
-file and put its contents under ``content`` key. What is more important, that
-will be done after template processing, so there will be no interference for
-possible ``$`` characters.
+or
+
+.. code:: yaml
+
+   write_files:
+     - path: /opt/somefile.txt
+       permissions: '0644'
+       url: https://some.url/content
+
+during processing this file, boxpy will look for ``filename`` or ``url`` keys
+in the yaml file for the ``write_files`` sections, and it will remove that key,
+read the file and put its contents under ``content`` key. What is more
+important, that will be done after template processing, so there will be no
+interference for possible ``$`` characters.
 
 What is more interesting is the fact, that you could use whatever cloud-init
 accepts, and a special section, for keeping configuration, so that you don't
@@ -202,3 +212,4 @@ This work is licensed under GPL-3.
 
 .. _pyyaml: https://github.com/yaml/pyyaml
 .. _cloud-init: https://cloudinit.readthedocs.io
+.. _requests: https://docs.python-requests.org

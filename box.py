@@ -14,10 +14,11 @@ import time
 import uuid
 import xml.dom.minidom
 
+import requests
 import yaml
 
 
-__version__ = "1.0"
+__version__ = "1.2"
 
 CACHE_DIR = os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
 CLOUD_IMAGE = "ci.iso"
@@ -423,26 +424,51 @@ class Config:
         if conf.get('write_files'):
             new_list = []
             for file_data in conf['write_files']:
+                content = None
                 fname = file_data.get('filename')
-                if not fname:
+                url = file_data.get('url')
+                if not any((fname, url)):
                     new_list.append(file_data)
                     continue
 
-                fname = os.path.expanduser(os.path.expandvars(fname))
-                if not os.path.exists(fname):
-                    LOG.warning("File '%s' doesn't exists",
-                                file_data['filename'])
-                    continue
+                if fname:
+                    key = 'filename'
+                    content = self._read_filename(fname)
+                    if content is None:
+                        LOG.warning("File '%s' doesn't exists", fname)
+                        continue
 
-                with open(fname) as fobj:
-                    file_data['content'] = fobj.read()
-                del file_data['filename']
-                new_list.append(file_data)
+                if url:
+                    key = 'url'
+                    code, content = self._get_url(url)
+                    if content is None:
+                        LOG.warning("Getting url '%s' returns %s code",
+                                    url, code)
+                        continue
+
+                if content:
+                    file_data['content'] = content
+                    del file_data[key]
+                    new_list.append(file_data)
 
             conf['write_files'] = new_list
 
         # 3. finally dump it again.
         return "#cloud-config\n" + yaml.safe_dump(conf)
+
+    def _get_url(self, url):
+        response = requests.get(url)
+        if response.status_code != 200:
+            return response.status_code, None
+        return response.status_code, response.text
+
+    def _read_filename(self, fname):
+        fullpath = os.path.expanduser(os.path.expandvars(fname))
+        if not os.path.exists(fullpath):
+            return
+
+        with open(fname) as fobj:
+            return fobj.read()
 
     def _set_ssh_key_path(self):
         self.ssh_key_path = self.key
