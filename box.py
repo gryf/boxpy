@@ -1150,6 +1150,9 @@ def vmcreate(args, conf=None):
     image = get_image_object(vbox, conf.version, image=conf.distro)
     path_to_disk = image.convert_to_vdi(conf.name + '.vdi', conf.disk_size)
 
+    if not path_to_disk:
+        return 21
+
     iso = IsoImage(conf)
     path_to_iso = iso.get_generated_image()
     if not path_to_iso:
