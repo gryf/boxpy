@@ -16,7 +16,7 @@ weird named options for ``vboxmanage`` ;P)
 Requirements
 ------------
 
-- Python 3.x
+- Python >=3.7
 
   - `pyyaml`_
   - `requests`_
