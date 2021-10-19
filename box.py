@@ -185,7 +185,7 @@ _boxpy() {
             ;;
         ssh)
             if [[ ${prev} == ${cmd} ]]; then
-                _vms_comp vms
+                _vms_comp runningvms
             fi
             ;;
     esac
