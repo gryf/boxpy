@@ -1227,7 +1227,12 @@ def vmcreate(args, conf=None):
 
 
 def vmdestroy(args):
-    for name in args.name:
+    if isinstance(args.name, list):
+        vm_names = args.name
+    else:
+        vm_names = [args.name]
+
+    for name in vm_names:
         vbox = VBoxManage(name)
         if not vbox.get_vm_info():
             LOG.fatal(f'Cannot remove VM "{name}" - it doesn\'t exists.')
