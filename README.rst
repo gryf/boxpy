@@ -22,7 +22,7 @@ Requirements
   - `requests`_
 
 - Virtualbox (obviously)
-- ``mkisofs`` or ``genisoimage`` command for generating iso image
+- ``mkisofs`` or ``genisoimage`` command for generating ISO image
 - ``wget`` command for fetching images
 - ``sha256sum`` command for checksum check
 - ``qemu-img`` from *qemu-utils* package command for converting between images

@@ -18,7 +18,7 @@ import requests
 import yaml
 
 
-__version__ = "1.2"
+__version__ = "1.3"
 
 CACHE_DIR = os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
 CLOUD_IMAGE = "ci.iso"
@@ -173,10 +173,15 @@ _boxpy() {
             fi
 
             ;;
-        destroy|info)
+        info)
             if [[ ${prev} == ${cmd} ]]; then
                 _vms_comp vms
             fi
+            ;;
+        destroy)
+            _vms_comp vms
+            _get_excluded_items "${COMPREPLY[@]}"
+            COMPREPLY=( $(compgen -W "$result" -- ${cur}) )
             ;;
         list)
             items=(--long --running --run-by-boxpy)
@@ -1222,13 +1227,16 @@ def vmcreate(args, conf=None):
 
 
 def vmdestroy(args):
-    vbox = VBoxManage(args.name)
-    if not vbox.get_vm_info():
-        LOG.fatal(f'Cannot remove VM "{args.name}" - it doesn\'t exists.')
-        return 18
-    else:
-        LOG.header('Removing VM: %s', args.name)
-    return VBoxManage(args.name).destroy()
+    for name in args.name:
+        vbox = VBoxManage(name)
+        if not vbox.get_vm_info():
+            LOG.fatal(f'Cannot remove VM "{name}" - it doesn\'t exists.')
+            return 18
+        LOG.header('Removing VM: %s', name)
+        res = VBoxManage(name).destroy()
+        if res:
+            return res
+    return 0
 
 
 def vmlist(args):
@@ -1431,7 +1439,7 @@ def main():
                         f"Default {DISTROS['ubuntu']['default_version']}")
 
     destroy = subparsers.add_parser('destroy', help='destroy VM')
-    destroy.add_argument('name', help='name or UUID of the VM')
+    destroy.add_argument('name', nargs='+', help='name or UUID of the VM')
     destroy.set_defaults(func=vmdestroy)
 
     list_vms = subparsers.add_parser('list', help='list VMs')
