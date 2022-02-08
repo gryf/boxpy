@@ -1012,12 +1012,13 @@ class CentosStream(Image):
         self._img_url = self.URL % (version, arch, self._img_fname)
 
     def _get_image_name(self, version, arch):
-        Run(['wget', self._checksum_url, '-q', '-O', self._checksum_file])
+        fname = os.path.join(self._tmp, self._checksum_file)
+        Run(['wget', self._checksum_url, '-q', '-O', fname])
 
         pat = re.compile(self.IMG % (version, arch))
 
         images = []
-        with open(self._checksum_file) as fobj:
+        with open(fname) as fobj:
             for line in fobj.read().strip().split('\n'):
                 line = line.strip()
                 if line.startswith('#'):
@@ -1026,6 +1027,7 @@ class CentosStream(Image):
                 if match and match.groups():
                     images.append(match.groups()[0])
 
+        Run(['rm', fname])
         images.reverse()
         if images:
             return images[0]
