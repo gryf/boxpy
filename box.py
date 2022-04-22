@@ -1339,7 +1339,8 @@ def vmrebuild(args):
 
     try:
         conf = Config(args, vbox)
-    except BoxNotFound:
+    except BoxNotFound as ex:
+        LOG.fatal(f'Error with parsing config: {ex}')
         return 8
     except yaml.YAMLError:
         LOG.fatal(f'Cannot read or parse file `{args.config}` as YAML '
