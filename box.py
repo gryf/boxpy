@@ -349,7 +349,7 @@ class FakeLogger:
 class Config:
     ATTRS = ('cpus', 'config', 'creator', 'disable_nested', 'disk_size',
              'distro', 'forwarding', 'hostname', 'key', 'memory', 'name',
-             'port', 'version')
+             'port', 'version', 'username')
 
     def __init__(self, args, vbox=None):
         self.advanced = None
@@ -365,6 +365,7 @@ class Config:
         self.name = args.name  # this one is not stored anywhere
         self.port = None       # at least is not even tried to be retrieved
         self.version = None
+        self.username = None
         self._conf = {}
 
         # set defaults stored in hard coded yaml
@@ -1181,32 +1182,50 @@ def vmcreate(args, conf=None):
 
     # than, let's try to see if boostraping process has finished
     LOG.info('Waiting for cloud init to finish ', end='')
+    username = DISTROS[conf.distro]["username"]
     cmd = ['ssh', '-o', 'StrictHostKeyChecking=no',
            '-o', 'UserKnownHostsFile=/dev/null',
            '-o', 'ConnectTimeout=2',
            '-i', conf.ssh_key_path[:-4],
-           f'ssh://{DISTROS[conf.distro]["username"]}'
-           f'@localhost:{vbox.vm_info["port"]}', 'sudo cloud-init status']
+           f'ssh://{username}@localhost:{vbox.vm_info["port"]}',
+           'sudo cloud-init status']
     try:
         while True:
-            out = Run(cmd).stdout
-            LOG.debug('Out: %s', out)
+            out = Run(cmd)
+            LOG.debug('Out: %s', out.stdout)
 
-            if (not out) or ('status' in out and 'running' in out):
+            if (not out.stdout) or ('status' in out.stdout and
+                                    'running' in out.stdout):
                 LOG.info('.', end='')
                 sys.stdout.flush()
+                if 'Permission denied (publickey)' in out.stderr:
+                    if conf.username and conf.username != username:
+                        username = conf.username
+                        vbox.setextradata('username', username)
+                        cmd[9] = (f'ssh://{username}'
+                                  f'@localhost:{vbox.vm_info["port"]}')
+                        continue
+                    raise PermissionError(f'There is an issue with accessing '
+                                          f'VM with ssh for user {username}. '
+                                          f'Check output in debug mode.')
                 time.sleep(3)
                 continue
 
             LOG.info(' done')
             break
-        out = out.split(':')[1].strip()
+        out = out.stdout.split(':')[1].strip()
         if out != 'done':
             cmd = cmd[:-1]
             cmd.append('cloud-init status -l')
             LOG.warning('Cloud init finished with "%s" status:\n%s', out,
                         Run(cmd).stdout)
 
+    except PermissionError:
+        LOG.info('\n')
+        iso.cleanup()
+        image.cleanup()
+        vbox.destroy()
+        raise
     except KeyboardInterrupt:
         LOG.warning('\nInterrupted, cleaning up')
         iso.cleanup()
@@ -1220,9 +1239,14 @@ def vmcreate(args, conf=None):
 
     # reread config to update fields
     conf = Config(args, vbox)
+    username = DISTROS[conf.distro]["username"]
     LOG.info('You can access your VM by issuing:')
-    LOG.info(f'ssh -p {conf.port} -i {conf.ssh_key_path[:-4]} '
-             f'{DISTROS[conf.distro]["username"]}@localhost')
+    if conf.username and conf.username != username:
+        LOG.info(f'ssh -p {conf.port} -i {conf.ssh_key_path[:-4]} '
+                 f'{conf.username}@localhost')
+    else:
+        LOG.info(f'ssh -p {conf.port} -i {conf.ssh_key_path[:-4]} '
+                 f'{username}@localhost')
     LOG.info('or simply:')
     LOG.info(f'boxpy ssh {conf.name}')
     return 0
@@ -1388,10 +1412,11 @@ def connect(args):
                   f'file.')
         return 16
 
+    username = conf.username or DISTROS[conf.distro]["username"]
     return Run(['ssh', '-o', 'StrictHostKeyChecking=no',
                 '-o', 'UserKnownHostsFile=/dev/null',
                 '-i', conf.ssh_key_path[:-4],
-                f'ssh://{DISTROS[conf.distro]["username"]}'
+                f'ssh://{username}'
                 f'@localhost:{conf.port}'], False).returncode
 
 
