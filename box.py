@@ -1208,7 +1208,7 @@ def vmcreate(args, conf=None):
                         Run(cmd).stdout)
 
     except KeyboardInterrupt:
-        LOG.warning('\nIterrupted, cleaning up')
+        LOG.warning('\nInterrupted, cleaning up')
         iso.cleanup()
         image.cleanup()
         vbox.destroy()
