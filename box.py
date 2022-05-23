@@ -1492,7 +1492,7 @@ def main():
                           help='show only running VMs')
     list_vms.set_defaults(func=vmlist)
 
-    rebuild = subparsers.add_parser('rebuild', help='Rebuild VM, all options '
+    rebuild = subparsers.add_parser('rebuild', help='rebuild VM, all options '
                                     'besides vm name are optional, and their '
                                     'values will be taken from vm definition.')
     rebuild.add_argument('name', help='name or UUID of the VM')
@@ -1527,7 +1527,7 @@ def main():
                             help="pick shell to generate completions for")
     completion.set_defaults(func=shell_completion)
 
-    ssh = subparsers.add_parser('ssh', help='Connect to the machine via SSH')
+    ssh = subparsers.add_parser('ssh', help='connect to the machine via SSH')
     ssh.add_argument('name', help='name or UUID of the VM')
     ssh.set_defaults(func=connect)
 
