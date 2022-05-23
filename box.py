@@ -1427,6 +1427,35 @@ def connect(args):
                 f'@localhost:{conf.port}'], False).returncode
 
 
+def _set_vmstate(name, state):
+
+    vbox = VBoxManage(name)
+    if not vbox.get_vm_info():
+        LOG.fatal(f'No machine has been found with a name `{name}`.')
+        return 20
+
+    if vbox.running and state == "start":
+        LOG.info(f'VM "{name}" is already running.')
+        return
+
+    if not vbox.running and state == "stop":
+        LOG.info(f'VM "{name}" is already stopped.')
+        return
+
+    if state == "start":
+        vbox.poweron()
+    else:
+        vbox.acpipowerbutton()
+
+
+def vmstart(args):
+    _set_vmstate(args.name, 'start')
+
+
+def vmstop(args):
+    _set_vmstate(args.name, 'stop')
+
+
 def main():
     parser = argparse.ArgumentParser(description="Automate deployment and "
                                      "maintenance of VMs using cloud config,"
@@ -1520,6 +1549,14 @@ def main():
                          help='amount of CPUs to be configured')
     rebuild.add_argument('-v', '--version', help='distribution version')
     rebuild.set_defaults(func=vmrebuild)
+
+    start = subparsers.add_parser('start', help='start VM')
+    start.add_argument('name', help='name or UUID of the VM')
+    start.set_defaults(func=vmstart)
+
+    stop = subparsers.add_parser('stop', help='stop VM')
+    stop.add_argument('name', help='name or UUID of the VM')
+    stop.set_defaults(func=vmstop)
 
     completion = subparsers.add_parser('completion', help='generate shell '
                                        'completion')
