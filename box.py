@@ -560,6 +560,7 @@ class VBoxManage:
         self.name_or_uuid = name_or_uuid
         self.vm_info = {}
         self.uuid = None
+        self.running = False
 
     def get_vm_base_path(self):
         path = self._get_vm_config()
@@ -611,6 +612,9 @@ class VBoxManage:
             if line.startswith('Config file:'):
                 self.vm_info['config_file'] = line.split('Config '
                                                          'file:')[1].strip()
+
+            if line.startswith('State:'):
+                self.running = line.split(':')[1].strip().startswith('running')
                 break
 
         dom = xml.dom.minidom.parse(self.vm_info['config_file'])
@@ -653,6 +657,9 @@ class VBoxManage:
 
     def poweroff(self):
         Run(['vboxmanage', 'controlvm', self.name_or_uuid, 'poweroff'])
+
+    def acpipowerbutton(self):
+        Run(['vboxmanage', 'controlvm', self.name_or_uuid, 'acpipowerbutton'])
 
     def vmlist(self, only_running=False, long_list=False, only_boxpy=False):
         subcommand = 'runningvms' if only_running else 'vms'
