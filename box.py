@@ -125,7 +125,7 @@ _boxpy() {
         fi
     fi
 
-    opts="create destroy rebuild info list completion ssh"
+    opts="create destroy rebuild info list completion ssh start stop"
     if [[ ${cur} == "-q" || ${cur} == "-v" || ${COMP_CWORD} -eq 1 ]] ; then
         COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
         return 0
@@ -189,6 +189,16 @@ _boxpy() {
             COMPREPLY=( $(compgen -W "$result" -- ${cur}) )
             ;;
         ssh)
+            if [[ ${prev} == ${cmd} ]]; then
+                _vms_comp runningvms
+            fi
+            ;;
+        start)
+            if [[ ${prev} == ${cmd} ]]; then
+                _vms_comp vms
+            fi
+            ;;
+        stop)
             if [[ ${prev} == ${cmd} ]]; then
                 _vms_comp runningvms
             fi
