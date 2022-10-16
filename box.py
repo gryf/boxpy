@@ -267,6 +267,10 @@ class BoxVBoxFailure(BoxError):
     pass
 
 
+class BoxConfError(BoxError):
+    pass
+
+
 class FakeLogger:
     """
     print based "logger" class. I like to use 'end' parameter of print
@@ -498,7 +502,7 @@ class Config:
             self.ssh_key_path = os.path.join(os.path.expanduser("~/.ssh"),
                                              self.ssh_key_path)
         if not os.path.exists(self.ssh_key_path):
-            raise BoxNotFound(f'Cannot find ssh public key: {self.key}')
+            raise BoxConfError(f'Cannot find ssh public key: {self.key}')
 
     def _set_defaults(self):
         conf = yaml.safe_load(USER_DATA)
@@ -718,6 +722,12 @@ class VBoxManage:
                    '--register'])
         if out.returncode != 0:
             LOG.fatal('Failed to create VM:\n%s', out.stderr)
+            return None
+
+        if out.stdout.startswith('WARNING:'):
+            LOG.fatal('Created crippled VM:\n%s\nFix the issue with '
+                      'VirtualBox, remove the dead VM and start over.',
+                      out.stdout)
             return None
 
         for line in out.stdout.split('\n'):
@@ -1137,7 +1147,8 @@ def vmcreate(args, conf=None):
     if not conf:
         try:
             conf = Config(args)
-        except BoxNotFound:
+        except BoxConfError as err:
+            LOG.fatal(f'Configuration error: {err.args[0]}.')
             return 7
         except yaml.YAMLError:
             LOG.fatal(f'Cannot read or parse file `{args.config}` as YAML '
