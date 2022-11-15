@@ -102,6 +102,10 @@ Currently, following commands are available:
 All of the commands have a range of options, and can be examined by using
 ``--help`` option.
 
+
+YAML Configuration
+------------------
+
 What is more interesting though, is the fact, that you can pass your own
 `cloud-init`_ yaml file, so that VM can be provisioned in easy way.
 
@@ -202,6 +206,19 @@ configuration additional NIC for virtual machine, i.e:
    boxpy_data:
      advanced:
        nic2: intnet
+
+To select image from local file system, it is possible to set one by providing
+it under ``boxpy_data.image`` key:
+
+.. code:: yaml
+
+   …
+   boxpy_data:
+     image: /path/to/the/qcow2/image
+     default_user: cloud-user
+
+Note, that default_user is also needed to be provided, as there is no guess,
+what is the default username for cloud-init configured within provided image.
 
 
 License
