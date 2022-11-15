@@ -139,7 +139,8 @@ _boxpy() {
             ;;
         create|rebuild)
             items=(--cpus --disable-nested --disk-size --distro --forwarding
-                --key --memory --hostname --port --config --version --type)
+                --image --key --memory --hostname --port --config --version
+                --type)
             if [[ ${prev} == ${cmd} ]]; then
                 if [[ ${cmd} = "rebuild" ]]; then
                     _vms_comp vms
@@ -362,18 +363,20 @@ class FakeLogger:
 
 class Config:
     ATTRS = ('cpus', 'config', 'creator', 'disable_nested', 'disk_size',
-             'distro', 'forwarding', 'hostname', 'key', 'memory', 'name',
-             'port', 'version', 'username')
+             'distro', 'default_user', 'forwarding', 'hostname', 'image',
+             'key', 'memory', 'name', 'port', 'version', 'username')
 
     def __init__(self, args, vbox=None):
         self.advanced = None
         self.distro = None
+        self.default_user = None
         self.cpus = None
         self.creator = None
         self.disable_nested = 'False'
         self.disk_size = None
         self.forwarding = {}
         self.hostname = None
+        self.image = None
         self.key = None
         self.memory = None
         self.name = args.name  # this one is not stored anywhere
@@ -548,6 +551,16 @@ class Config:
                     self.forwarding[k] = v
                 continue
             setattr(self, key, str(val))
+
+        # update distros dict with custom entry if there is at least image
+        if conf.get('boxpy_data') and conf['boxpy_data'].get('image'):
+            custom = {'username': conf['boxpy_data'].get('default_user'),
+                      'realname': 'custom os',
+                      'img_class': CustomImage,
+                      'amd64': 'x86_64',
+                      'image': conf['boxpy_data']['image'],
+                      'default_version': '0'}
+            DISTROS['custom'] = custom
 
         # remove boxpy_data since it will be not needed on the guest side
         if conf.get('boxpy_data'):
@@ -896,10 +909,10 @@ class Image:
     URL = ""
     IMG = ""
 
-    def __init__(self, vbox, version, arch, release):
+    def __init__(self, vbox, version, arch, release, fname=None):
         self.vbox = vbox
         self._tmp = tempfile.mkdtemp(prefix='boxpy_')
-        self._img_fname = None
+        self._img_fname = fname
 
     def convert_to_vdi(self, disk_img, size):
         LOG.info('Converting and resizing "%s", new size: %s', disk_img, size)
@@ -978,7 +991,7 @@ class Ubuntu(Image):
     URL = "https://cloud-images.ubuntu.com/releases/%s/release/%s"
     IMG = "ubuntu-%s-server-cloudimg-%s.img"
 
-    def __init__(self, vbox, version, arch, release):
+    def __init__(self, vbox, version, arch, release, fname=None):
         super().__init__(vbox, version, arch, release)
         self._img_fname = self.IMG % (version, arch)
         self._img_url = self.URL % (version, self._img_fname)
@@ -1003,7 +1016,7 @@ class Fedora(Image):
     IMG = "Fedora-Cloud-Base-%s-%s.%s.qcow2"
     CHKS = "Fedora-Cloud-%s-%s-%s-CHECKSUM"
 
-    def __init__(self, vbox, version, arch, release):
+    def __init__(self, vbox, version, arch, release, fname=None):
         super().__init__(vbox, version, arch, release)
         self._img_fname = self.IMG % (version, release, arch)
         self._img_url = self.URL % (version, arch, self._img_fname)
@@ -1074,6 +1087,13 @@ class CentosStream(Image):
         return expected_sum
 
 
+class CustomImage(Image):
+
+    def _download_image(self):
+        # just use provided image
+        return True
+
+
 DISTROS = {'ubuntu': {'username': 'ubuntu',
                       'realname': 'ubuntu',
                       'img_class': Ubuntu,
@@ -1096,7 +1116,7 @@ def get_image_object(vbox, version, image='ubuntu', arch='amd64'):
     if image == 'fedora':
         release = FEDORA_RELEASE_MAP[version]
     return DISTROS[image]['img_class'](vbox, version, DISTROS[image]['amd64'],
-                                       release)
+                                       release, DISTROS[image].get('image'))
 
 
 class IsoImage:
@@ -1172,7 +1192,9 @@ def vmcreate(args, conf=None):
     if not vbox.create_controller('SATA', 'sata'):
         return 4
 
-    for key in ('distro', 'hostname', 'key', 'version'):
+    for key in ('distro', 'hostname', 'key', 'version', 'image'):
+        if not getattr(conf, key) is None:
+            continue
         if not vbox.setextradata(key, getattr(conf, key)):
             return 5
 
