@@ -1193,7 +1193,7 @@ def vmcreate(args, conf=None):
         return 4
 
     for key in ('distro', 'hostname', 'key', 'version', 'image'):
-        if not getattr(conf, key) is None:
+        if getattr(conf, key) is None:
             continue
         if not vbox.setextradata(key, getattr(conf, key)):
             return 5
