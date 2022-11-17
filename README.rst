@@ -55,7 +55,7 @@ or simply link it somewhere in the path:
    $ chmod +x ~/bin/boxpy
 
 and now you can issue some command. For example, to spin up a VM with Ubuntu
-18.04 with one CPU, 2GB of memory and 10GB of disk:
+18.04 with one CPU, 1GB of memory and 6GB of disk:
 
 .. code:: shell-session
 

@@ -46,9 +46,9 @@ ssh:
   emit_keys_to_console: false
 boxpy_data:
   cpus: 1
-  disk_size: 10240
+  disk_size: 6144
   key: ~/.ssh/id_rsa
-  memory: 2048
+  memory: 1024
 '''
 COMPLETIONS = {'bash': '''\
 _boxpy() {
