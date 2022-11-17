@@ -419,6 +419,10 @@ class Config:
                 continue
             setattr(self, attr, str(val))
 
+        # sort out case, where there is image/default-user provided
+        if self.image:
+            self._update_distros_with_custom_image()
+
         # set distribution and version if not specified by user
         if not self.distro:
             self.distro = 'ubuntu'
@@ -552,16 +556,6 @@ class Config:
                 continue
             setattr(self, key, str(val))
 
-        # update distros dict with custom entry if there is at least image
-        if conf.get('boxpy_data') and conf['boxpy_data'].get('image'):
-            custom = {'username': conf['boxpy_data'].get('default_user'),
-                      'realname': 'custom os',
-                      'img_class': CustomImage,
-                      'amd64': 'x86_64',
-                      'image': conf['boxpy_data']['image'],
-                      'default_version': '0'}
-            DISTROS['custom'] = custom
-
         # remove boxpy_data since it will be not needed on the guest side
         if conf.get('boxpy_data'):
             if conf['boxpy_data'].get('advanced'):
@@ -569,6 +563,18 @@ class Config:
             del conf['boxpy_data']
 
         self._conf = conf
+
+    def _update_distros_with_custom_image(self):
+        self.image = os.path.abspath(self.image)
+        self.distro = 'custom'
+        if not self.username:
+            self.username = self.default_user
+        DISTROS['custom'] = {'username': self.default_user,
+                             'realname': 'custom os',
+                             'img_class': CustomImage,
+                             'amd64': 'x86_64',
+                             'image': self.image,
+                             'default_version': '0'}
 
     def _update(self, source, update):
         for key, val in update.items():
@@ -1192,7 +1198,7 @@ def vmcreate(args, conf=None):
     if not vbox.create_controller('SATA', 'sata'):
         return 4
 
-    for key in ('distro', 'hostname', 'key', 'version', 'image'):
+    for key in ('distro', 'hostname', 'key', 'version', 'image', 'username'):
         if getattr(conf, key) is None:
             continue
         if not vbox.setextradata(key, getattr(conf, key)):
