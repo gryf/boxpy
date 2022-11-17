@@ -138,9 +138,9 @@ _boxpy() {
             fi
             ;;
         create|rebuild)
-            items=(--cpus --disable-nested --disk-size --distro --forwarding
-                --image --key --memory --hostname --port --config --version
-                --type)
+            items=(--cpus --disable-nested --disk-size --default-user --distro
+                --forwarding --image --key --memory --hostname --port --config
+                --version --type)
             if [[ ${prev} == ${cmd} ]]; then
                 if [[ ${cmd} = "rebuild" ]]; then
                     _vms_comp vms
@@ -1526,10 +1526,16 @@ def main():
                         help="Alternative user-data template filepath")
     create.add_argument('-d', '--distro', help="Image name. 'ubuntu' is "
                         "default")
+    create.add_argument('-e', '--default-user', help="Default cloud-init user "
+                        "to be used with custom image (--image param). "
+                        "Without image it will make no effect.")
     create.add_argument('-f', '--forwarding', action='append', help="expose "
                         "port from VM to the host. It should be in format "
                         "'hostport:vmport'. this option can be used multiple "
                         "times for multiple ports.")
+    create.add_argument('-i', '--image', help="custom qcow2 image filepath. "
+                        "Note, that it requires to provide --default-user as "
+                        "well.")
     create.add_argument('-k', '--key', help="SSH key to be add to the config "
                         "drive. Default ~/.ssh/id_rsa")
     create.add_argument('-m', '--memory', help="amount of memory in "
@@ -1571,10 +1577,16 @@ def main():
     rebuild.add_argument('-c', '--config',
                          help="Alternative user-data template filepath")
     rebuild.add_argument('-d', '--distro', help="Image name.")
+    rebuild.add_argument('-e', '--default-user', help="Default cloud-init "
+                         "user to be used with custom image (--image param). "
+                         "Without image it will make no effect.")
     rebuild.add_argument('-f', '--forwarding', action='append', help="expose "
                          "port from VM to the host. It should be in format "
                          "'hostport:vmport'. this option can be used multiple "
                          "times for multiple ports.")
+    rebuild.add_argument('-i', '--image', help="custom qcow2 image filepath. "
+                         "Note, that it requires to provide --default-user as "
+                         "well.")
     rebuild.add_argument('-k', '--key',
                          help='SSH key to be add to the config drive')
     rebuild.add_argument('-m', '--memory', help='amount of memory in '
@@ -1616,6 +1628,10 @@ def main():
     info.set_defaults(func=vminfo)
 
     args = parser.parse_args()
+
+    if 'image' in args and 'default_user' not in args:
+        parser.error('Parameter --image requires --default-user')
+        return 22
 
     LOG.set_verbose(args.verbose, args.quiet)
 
