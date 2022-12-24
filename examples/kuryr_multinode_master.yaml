@@ -34,55 +34,55 @@ write_files:
     content: |
       [[local|localrc]]
       disable_all_services
-      
+
       # Cinder
       disable_service c-api
       disable_service c-bak
       disable_service c-sch
       disable_service c-vol
       disable_service cinder
-      
+
       # Coredns
       disable_service coredns
-      
-      # Dstat 
+
+      # Dstat
       disable_service dstat
-      
+
       # ETCD
       enable_service etcd3
-      
+
       # Glance
       enable_service g-api
       enable_service g-reg
-      
+
       # Horizon
       disable_service horizon
-      
+
       # Keystone
       enable_service key
-      
+
       # kubernetes
       enable_service kubernetes-master
       disable_service kubernetes-worker
-      
+
       # kuryr
       enable_service kuryr-daemon
       enable_service kuryr-kubernetes
-      
+
       # mysql.
       enable_service mysql
-      
+
       # Nova services
       enable_service n-api
       enable_service n-api-meta
       enable_service n-cond
       enable_service n-cpu
       enable_service n-sch
-      
+
       # Neutron
       enable_service neutron
       enable_service neutron-tag-ports-during-bulk-creation
-      
+
       # Octavia
       enable_service o-api
       enable_service o-cw
@@ -90,41 +90,41 @@ write_files:
       enable_service o-hk
       enable_service o-hm
       enable_service octavia
-      
+
       # Neutron ovn services
       enable_service ovn-controller
       enable_service ovn-northd
       enable_service ovs-vswitchd
       enable_service ovsdb-server
-      
+
       # Placement API
       enable_service placement-api
       enable_service placement-client
-      
+
       # Neutron services
       enable_service q-ovn-metadata-agent
       enable_service q-qos
       enable_service q-svc
       enable_service q-trunk
       enable_service rabbit
-      
+
       # Swift
       disable_service s-account
       disable_service s-container
       disable_service s-object
       disable_service s-proxy
-      
+
       # Tempest
       enable_service tempest
-      
+
       # TLS
       disable_service tls-proxy
-      
+
       # Vars
       ADMIN_PASSWORD="secretadmin"
       DATABASE_PASSWORD="secretdatabase"
       ETCD_USE_RAMDISK="True"
-      
+
       KURYR_ENABLED_HANDLERS="vif,endpoints,service,namespace,pod_label,policy,kuryrnetworkpolicy,kuryrnetwork,kuryrport,kuryrloadbalancer"
       KURYR_ENFORCE_SG_RULES="False"
       KURYR_EP_DRIVER_OCTAVIA_PROVIDER="ovn"
@@ -134,30 +134,30 @@ write_files:
       KURYR_NEUTRON_DEFAULT_ROUTER="router1"
       KURYR_SG_DRIVER="policy"
       KURYR_SUBNET_DRIVER="namespace"
-      
+
       LOGFILE="/opt/stack/logs/devstacklog.txt"
       LOG_COLOR="False"
       ML2_L3_PLUGIN="ovn-router,trunk,qos"
       OCTAVIA_AMP_IMAGE_FILE="/tmp/test-only-amphora-x64-haproxy-ubuntu-bionic.qcow2"
       OCTAVIA_AMP_IMAGE_NAME="test-only-amphora-x64-haproxy-ubuntu-bionic"
       OCTAVIA_AMP_IMAGE_SIZE="3"
-      
+
       OVN_BRANCH="v20.06.2"
       OVN_BUILD_FROM_SOURCE="True"
       OVN_DBS_LOG_LEVEL="dbg"
       OVN_L3_CREATE_PUBLIC_NETWORK="True"
-      
+
       VAR_RUN_PATH="/usr/local/var/run"
-      
+
       RABBIT_PASSWORD="secretrabbit"
       RECLONE="no"
       SERVICE_PASSWORD="secretservice"
       SERVICE_TOKEN="password"
-      
+
       LIBS_FROM_GIT=cinder,devstack,devstack-gate,devstack-plugin-container,glance,keystone,kuryr-kubernetes,kuryr-tempest-plugin,neutron,nova,octavia,octavia-tempest-plugin,ovn-octavia-provider,placement,python-octaviaclient,requirements,swift,tempest
-      
+
       TEMPEST_PLUGINS="/opt/stack/kuryr-tempest-plugin /opt/stack/octavia-tempest-plugin"
-      
+
       # enabled plugins
       enable_plugin devstack-plugin-container https://opendev.org/openstack/devstack-plugin-container
       enable_plugin kuryr-kubernetes https://opendev.org/openstack/kuryr-kubernetes
@@ -166,7 +166,7 @@ write_files:
       enable_plugin octavia https://opendev.org/openstack/octavia
       enable_plugin octavia-tempest-plugin https://opendev.org/openstack/octavia-tempest-plugin
       enable_plugin ovn-octavia-provider https://opendev.org/openstack/ovn-octavia-provider
-      
+
       [[post-config|$OCTAVIA_CONF]]
       [api_settings]
       enabled_provider_drivers = amphora:'Octavia Amphora driver',ovn:'Octavia OVN driver'
@@ -174,7 +174,7 @@ runcmd:
   - [apt, purge, '-y', python3-pyasn1-modules]
   - [apt, purge, '-y', python3-simplejson]
   - [su, -, ubuntu, -c, "git clone https://github.com/gryf/vmstrap"]
-  - [su, -, ubuntu, -c, "vmstrap/bootstrap.sh"]
+  - [su, -, ubuntu, -c, "vmstrap/bootstrap.sh -c"]
   - [rm, -fr, /home/ubuntu/vmstrap]
   - [su, -, ubuntu, -c, "echo 'export HOST_IP=192.168.10.10' >> .bashrc"]
   - [su, -, ubuntu, -c, "cp /tmp/local.conf /home/ubuntu/devstack/"]
@@ -186,3 +186,4 @@ boxpy_data:
   disk_size: 50GB
   advanced:
     nic2: intnet
+  version: 20.04

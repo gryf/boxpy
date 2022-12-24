@@ -29,7 +29,7 @@ runcmd:
   - [apt, purge, '-y', python3-pyasn1-modules]
   - [apt, purge, '-y', python3-simplejson]
   - [su, -, ubuntu, -c, "git clone https://github.com/gryf/vmstrap"]
-  - [su, -, ubuntu, -c, "vmstrap/bootstrap.sh"]
+  - [su, -, ubuntu, -c, "vmstrap/bootstrap.sh -c"]
   - [rm, -fr, /home/ubuntu/vmstrap]
   - [su, -, ubuntu, -c, "cp /tmp/local.conf /home/ubuntu/devstack/"]
   - [su, -, ubuntu, -c, "echo 'export HOST_IP=10.0.2.15' >> .bashrc"]

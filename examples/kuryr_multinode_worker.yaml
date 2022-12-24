@@ -34,28 +34,28 @@ write_files:
     content: |
       [[local|localrc]]
       disable_all_services
-      
+
       # Cinder
       disable_service c-bak
       disable_service c-vol
-      
+
       # Dstat (started to fail recently)
       disable_service dstat
-      
+
       # Horizon
       disable_service horizon
-      
+
       # kubernetes
       disable_service kubernetes-master
       enable_service kubernetes-worker
-      
+
       # kuryr
       enable_service kuryr-daemon
       disable_service kuryr-kubernetes
-      
+
       # Nova
       enable_service n-cpu
-      
+
       # Neutron
       enable_service neutron
       enable_service ovn-controller
@@ -63,27 +63,27 @@ write_files:
       enable_service ovn-octavia-provider
       enable_service ovs-vswitchd
       enable_service ovsdb-server
-      
+
       # Placement API
       enable_service placement-client
-      
+
       # Neutron services cd
       enable_service q-ovn-metadata-agent
       disable_service q-svc
-      
+
       # tempest
       disable_service tempest
-      
+
       # tls
       disable_service tls-proxy
-      
+
       # Vars
       ADMIN_PASSWORD="secretadmin"
       DATABASE_HOST="192.168.10.10"
       DATABASE_PASSWORD="secretdatabase"
       ENABLE_CHASSIS_AS_GW="False"
       GLANCE_HOSTPORT="192.168.10.10:9292"
-     
+
       # turn on ovn-provider
       KURYR_ENFORCE_SG_RULES="False"
       KURYR_EP_DRIVER_OCTAVIA_PROVIDER="ovn"
@@ -91,18 +91,18 @@ write_files:
       KURYR_LB_ALGORITHM="SOURCE_IP_PORT"
       KURYR_NEUTRON_DEFAULT_ROUTER="router1"
       VAR_RUN_PATH="/usr/local/var/run"
-      
+
       KURYR_ENABLED_HANDLERS="vif,endpoints,service,namespace,pod_label,policy,kuryrnetworkpolicy,kuryrnetwork,kuryrport,kuryrloadbalancer"
       KURYR_SG_DRIVER="policy"
       KURYR_SUBNET_DRIVER="namespace"
-      
-      
+
+
       OVN_BRANCH="v20.06.2"
       OVN_BUILD_FROM_SOURCE="True"
       OVN_DBS_LOG_LEVEL="dbg"
       OVN_L3_CREATE_PUBLIC_NETWORK="True"
-      
-      
+
+
       LIBVIRT_TYPE="qemu"
       LOGFILE="/opt/stack/logs/devstacklog.txt"
       LOG_COLOR="False"
@@ -113,9 +113,9 @@ write_files:
       SERVICE_HOST="192.168.10.10"
       SERVICE_PASSWORD="secretservice"
       SERVICE_TOKEN="password"
-      
+
       LIBS_FROM_GIT=cinder,devstack,devstack-gate,devstack-plugin-container,glance,keystone,kuryr-kubernetes,kuryr-tempest-plugin,neutron,nova,octavia,placement,python-octaviaclient,requirements,swift,tempest
-      
+
       # enabled plugins
       enable_plugin devstack-plugin-container https://opendev.org/openstack/devstack-plugin-container
       enable_plugin kuryr-kubernetes https://opendev.org/openstack/kuryr
@@ -123,7 +123,7 @@ runcmd:
   - [apt, purge, '-y', python3-pyasn1-modules]
   - [apt, purge, '-y', python3-simplejson]
   - [su, -, ubuntu, -c, "git clone https://github.com/gryf/vmstrap"]
-  - [su, -, ubuntu, -c, "vmstrap/bootstrap.sh"]
+  - [su, -, ubuntu, -c, "vmstrap/bootstrap.sh -c"]
   - [rm, -fr, /home/ubuntu/vmstrap]
   - [su, -, ubuntu, -c, "echo 'export HOST_IP=192.168.10.11' >> .bashrc"]
   - [su, -, ubuntu, -c, "cp /tmp/local.conf /home/ubuntu/devstack/"]
@@ -135,3 +135,4 @@ boxpy_data:
   disk_size: 50GB
   advanced:
     nic2: intnet
+  version: 20.04
