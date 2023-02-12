@@ -978,7 +978,8 @@ class Image:
             return True
 
         fname = os.path.join(CACHE_DIR, self._img_fname)
-        LOG.header('Downloading image %s', self._img_fname)
+        LOG.header('Downloading image %s from %s', self._img_fname,
+                   self._img_url)
         Run(['wget', '-q', self._img_url, '-O', fname])
 
         if not self._checksum():
