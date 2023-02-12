@@ -1048,7 +1048,7 @@ class CentosStream(Image):
     IMG = '.*(CentOS-Stream-GenericCloud-%s-[0-9]+.[0-9].%s.qcow2).*'
     CHKS = "CHECKSUM"
 
-    def __init__(self, vbox, version, arch, release):
+    def __init__(self, vbox, version, arch, release, fname=None):
         super().__init__(vbox, version, arch, release)
         self._checksum_file = '%s-centos-stream-%s-%s' % (self.CHKS, version,
                                                           arch)
