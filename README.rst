@@ -91,13 +91,15 @@ use it ad-hoc, or place on your ``.bashrc`` or whatever:
 
 Currently, following commands are available:
 
-- ``list`` - for quickly listing all/running VMs
-- ``info`` - to get summary about VM
-- ``destroy`` - that is probably obvious one
+- ``completion`` - as described above
 - ``create`` - create new VM
+- ``destroy`` - that is probably obvious one
+- ``info`` - to get summary about VM
+- ``list`` - for quickly listing all/running VMs
 - ``rebuild`` - recreate specified VM
 - ``ssh`` - connect to the VM using ssh
-- ``completion`` - as described above
+- ``start`` - stop the running VM
+- ``stop`` - start stopped VM
 
 All of the commands have a range of options, and can be examined by using
 ``--help`` option.
