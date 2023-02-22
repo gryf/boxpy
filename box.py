@@ -1470,11 +1470,14 @@ def connect(args):
         return 16
 
     username = conf.username or DISTROS[conf.distro]["username"]
-    return Run(['ssh', '-o', 'StrictHostKeyChecking=no',
-                '-o', 'UserKnownHostsFile=/dev/null',
-                '-i', conf.ssh_key_path[:-4],
-                f'ssh://{username}'
-                f'@localhost:{conf.port}'], False).returncode
+    cmd = ['ssh', '-o', 'StrictHostKeyChecking=no',
+           '-o', 'UserKnownHostsFile=/dev/null',
+           '-i', conf.ssh_key_path[:-4],
+           f'ssh://{username}'
+           f'@localhost:{conf.port}']
+    LOG.debug('Connecting to vm `%s` using command:\n%s', args.name,
+              ' '.join(cmd))
+    return Run(cmd, False).returncode
 
 
 def _set_vmstate(name, state):
