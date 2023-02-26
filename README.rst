@@ -39,7 +39,7 @@ your operating system, or by using virtualenv for Python requirements, i.e.:
 
    $ python -m virtualenv .venv
    $ . .venv/bin/activate
-   (.venv) $ pip install requirements.txt
+   (.venv) $ pip install -r requirements.txt
 
 then you can issue:
 
