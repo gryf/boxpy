@@ -1445,6 +1445,13 @@ def vmrebuild(args):
         conf.disk_size = vbox.get_media_size(disk_path)
 
     vmdestroy(args)
+
+    # Wait till VM is gone
+    while True:
+        vbox = VBoxManage(args.name)
+        if not vbox.get_vm_info():
+            break
+
     vmcreate(args, conf)
     return 0
 
