@@ -23,9 +23,10 @@ __version__ = "1.3"
 CACHE_DIR = os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
 CLOUD_IMAGE = "ci.iso"
 FEDORA_RELEASE_MAP = {'32': '1.6', '33': '1.2', '34': '1.2'}
+DEBIAN_CODENAME_MAP = {'12': 'bookworm', '11': 'bullseye', '10': 'buster'}
 TYPE_MAP = {'HardDisk': 'disk', 'DVD': 'dvd', 'Floppy': 'floppy'}
 DISTRO_MAP = {'ubuntu': 'Ubuntu', 'fedora': 'Fedora',
-              'centos': 'Centos Stream'}
+              'centos': 'Centos Stream', 'debian': 'Debian'}
 META_DATA_TPL = string.Template('''\
 instance-id: $instance_id
 local-hostname: $vmhostname
@@ -160,8 +161,8 @@ _boxpy() {
                         _ssh_identityfile
                         ;;
                     --distro)
-                        COMPREPLY=( $(compgen -W "ubuntu fedora centos" \
-                                -- ${cur}) )
+                        COMPREPLY=( $(compgen -W "ubuntu fedora centos
+                            debian" -- ${cur}) )
                         ;;
                     --type)
                         COMPREPLY=( $(compgen -W "gui headless sdl separate" \
@@ -592,6 +593,9 @@ class OsTypes:
     def fedora(conf):
         return "Fedora_64"
 
+    def debian(conf):
+        return "Debian%s_64" % conf.version
+
 
 class VBoxManage:
     """
@@ -930,6 +934,7 @@ class VBoxManage:
 class Image:
     URL = ""
     IMG = ""
+    CHECKSUMTOOL = 'sha256sum'
 
     def __init__(self, vbox, version, arch, release, fname=None):
         self.vbox = vbox
@@ -980,7 +985,7 @@ class Image:
             return False
 
         if os.path.exists(os.path.join(CACHE_DIR, self._img_fname)):
-            cmd = ['sha256sum', os.path.join(CACHE_DIR, self._img_fname)]
+            cmd = [self.CHECKSUMTOOL, os.path.join(CACHE_DIR, self._img_fname)]
             calulated_sum = Run(cmd).stdout.split(' ')[0]
             LOG.details('Checksum for image: %s, expected: %s', calulated_sum,
                         expected_sum)
@@ -1020,6 +1025,30 @@ class Ubuntu(Image):
         self._img_url = self.URL % (version, self._img_fname)
         self._checksum_file = 'SHA256SUMS'
         self._checksum_url = self.URL % (version, self._checksum_file)
+
+    def _get_checksum(self, fname):
+        expected_sum = None
+        Run(['wget', self._checksum_url, '-q', '-O', fname])
+        with open(fname) as fobj:
+            for line in fobj.readlines():
+                if self._img_fname in line:
+                    expected_sum = line.split(' ')[0]
+                    break
+
+        return expected_sum
+
+
+class Debian(Image):
+    URL = "https://cloud.debian.org/images/cloud/%s/daily/latest/%s"
+    IMG = "debian-%s-generic-%s-daily.qcow2"
+    CHECKSUMTOOL = 'sha512sum'
+
+    def __init__(self, vbox, version, arch, release, fname=None):
+        super().__init__(vbox, version, arch, release)
+        self._img_fname = self.IMG % (version, arch)
+        self._img_url = self.URL % (release, self._img_fname)
+        self._checksum_file = 'SHA512SUMS'
+        self._checksum_url = self.URL % (release, self._checksum_file)
 
     def _get_checksum(self, fname):
         expected_sum = None
@@ -1131,13 +1160,20 @@ DISTROS = {'ubuntu': {'username': 'ubuntu',
                       'realname': 'centos',
                       'img_class': CentosStream,
                       'amd64': 'x86_64',
-                      'default_version': '8'}}
+                      'default_version': '8'},
+           'debian': {'username': 'debian',
+                      'realname': 'debian',
+                      'img_class': Debian,
+                      'amd64': 'amd64',
+                      'default_version': '11'}}
 
 
 def get_image_object(vbox, version, image='ubuntu', arch='amd64'):
     release = None
     if image == 'fedora':
         release = FEDORA_RELEASE_MAP[version]
+    if image == 'debian':
+        release = DEBIAN_CODENAME_MAP[version]
     return DISTROS[image]['img_class'](vbox, version, DISTROS[image]['amd64'],
                                        release, DISTROS[image].get('image'))
 
@@ -1263,6 +1299,7 @@ def vmcreate(args, conf=None):
            f'ssh://{username}@localhost:{vbox.vm_info["port"]}',
            'sudo cloud-init status']
     try:
+        counter = 0
         while True:
             out = Run(cmd)
             LOG.debug('Out: %s', out.stdout)
@@ -1282,6 +1319,15 @@ def vmcreate(args, conf=None):
                                           f'VM with ssh for user {username}. '
                                           f'Check output in debug mode.')
                 time.sleep(3)
+                counter += 1
+                if counter == 8 and conf.distro == 'debian':
+                    counter += 1
+                    # there is something odd with debian cloud images, as they
+                    # segfault on first run. after ~20 seconds there should
+                    # already be panic, reset machine should help
+                    vbox.poweroff()
+                    time.sleep(3)
+                    vbox.poweron(args.type)
                 continue
 
             LOG.info(' done')
