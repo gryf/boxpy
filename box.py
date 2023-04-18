@@ -585,6 +585,14 @@ class Config:
         return source
 
 
+class OsTypes:
+    def ubuntu(conf):
+        return "Ubuntu%s_64" % conf.version.replace('.', '_')
+
+    def fedora(conf):
+        return "Fedora_64"
+
+
 class VBoxManage:
     """
     Class for dealing with vboxmanage commands
@@ -765,7 +773,15 @@ class VBoxManage:
                '--acpi', 'on',
                '--audio', 'none',
                '--nic1', 'nat',
-               '--natpf1', f'boxpyssh,tcp,,{port},,22']
+               '--natpf1', f'boxpyssh,tcp,,{port},,22',
+               '--graphicscontroller', 'vmsvga',
+               '--vram', '16']
+
+        if hasattr(OsTypes, conf.distro):
+            cmd.extend(['--ostype', getattr(OsTypes, conf.distro)(conf)])
+        else:
+            cmd.extend(['--ostype', 'Linux_64'])
+
         for count, (hostport, vmport) in enumerate(conf.forwarding.items(),
                                                    start=1):
             cmd.extend(['--natpf1', f'custom-pf-{count},tcp,,{hostport},'
