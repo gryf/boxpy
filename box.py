@@ -18,7 +18,7 @@ import requests
 import yaml
 
 
-__version__ = "1.8"
+__version__ = "1.9"
 
 CACHE_DIR = os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
 CLOUD_IMAGE = "ci.iso"
@@ -138,12 +138,36 @@ _boxpy() {
                 COMPREPLY=( $(compgen -W "bash" -- ${cur}) )
             fi
             ;;
+        start)
+            items=(--type)
+            if [[ ${prev} == ${cmd} ]]; then
+                if [[ ${cmd} = "start" ]]; then
+                    _vms_comp vms
+                else
+                    COMPREPLY=( $(compgen -W "${items[*]}" -- ${cur}) )
+                fi
+            else
+                _get_excluded_items "${items[@]}"
+                COMPREPLY=( $(compgen -W "$result" -- ${cur}) )
+
+                case "${prev}" in
+                    --type)
+                        COMPREPLY=( $(compgen -W "gui headless sdl separate" \
+                            -- ${cur}) )
+                        ;;
+                    --*)
+                        COMPREPLY=( )
+                        ;;
+                esac
+            fi
+
+            ;;
         create|rebuild)
             items=(--cpus --disable-nested --disk-size --default-user --distro
                 --forwarding --image --key --memory --hostname --port --config
                 --version --type)
             if [[ ${prev} == ${cmd} ]]; then
-                if [[ ${cmd} = "rebuild" ]]; then
+                if [[ ${cmd} = "rebuild" || ${cmd} == "start" ]]; then
                     _vms_comp vms
                 else
                     COMPREPLY=( $(compgen -W "${items[*]}" -- ${cur}) )
@@ -193,11 +217,6 @@ _boxpy() {
         ssh)
             if [[ ${prev} == ${cmd} ]]; then
                 _vms_comp runningvms
-            fi
-            ;;
-        start)
-            if [[ ${prev} == ${cmd} ]]; then
-                _vms_comp vms
             fi
             ;;
         stop)
@@ -1583,7 +1602,7 @@ def connect(args):
     return Run(cmd, False).returncode
 
 
-def _set_vmstate(name, state):
+def _set_vmstate(name, state, guitype=None):
 
     vbox = VBoxManage(name)
     if not vbox.get_vm_info():
@@ -1599,13 +1618,13 @@ def _set_vmstate(name, state):
         return
 
     if state == "start":
-        vbox.poweron()
+        vbox.poweron(guitype)
     else:
         vbox.acpipowerbutton()
 
 
 def vmstart(args):
-    _set_vmstate(args.name, 'start')
+    _set_vmstate(args.name, 'start', args.type)
 
 
 def vmstop(args):
@@ -1720,6 +1739,9 @@ def main():
 
     start = subparsers.add_parser('start', help='start VM')
     start.add_argument('name', help='name or UUID of the VM')
+    start.add_argument('-t', '--type', default='headless',
+                       help="VM run type, headless by default.",
+                       choices=['gui', 'headless', 'sdl', 'separate'])
     start.set_defaults(func=vmstart)
 
     stop = subparsers.add_parser('stop', help='stop VM')
