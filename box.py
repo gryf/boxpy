@@ -1320,11 +1320,18 @@ def vmcreate(args, conf=None):
                                           f'Check output in debug mode.')
                 time.sleep(3)
                 counter += 1
-                if counter == 8 and conf.distro == 'debian':
+
+                # TODO: there is something odd with debian cloud images prior
+                # to 12 (bookworm), as on first run system crashes. In that
+                # case after ~20 seconds there should already be panic, reset
+                # machine as a workaround. Remove this after debian 12
+                # stabilization later this year.
+                if (counter == 8 and conf.distro == 'debian'
+                        and conf.version != '12'):
+                    LOG.debug('Resetting `%s`, due to the issue with kernel '
+                              'panic on Debian %s the first run', conf.name,
+                              conf.version)
                     counter += 1
-                    # there is something odd with debian cloud images, as they
-                    # segfault on first run. after ~20 seconds there should
-                    # already be panic, reset machine should help
                     vbox.poweroff()
                     time.sleep(3)
                     vbox.poweron(args.type)
