@@ -18,7 +18,7 @@ import requests
 import yaml
 
 
-__version__ = "1.3"
+__version__ = "1.8"
 
 CACHE_DIR = os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
 CLOUD_IMAGE = "ci.iso"
@@ -587,14 +587,45 @@ class Config:
 
 
 class OsTypes:
-    def ubuntu(conf):
-        return "Ubuntu%s_64" % conf.version.replace('.', '_')
+    def __init__(self, conf):
+        self._conf = conf
+        self._ostypes = []
 
-    def fedora(conf):
+        self._gather_os_types()
+
+    def _gather_os_types(self):
+        out = Run(['vboxmanage', 'list', 'ostypes']).stdout
+        for line in out.split('\n'):
+            if not line.startswith('ID:'):
+                continue
+            self._ostypes.append(line.split(':')[1].strip())
+
+    def ubuntu(self):
+        lts = ''
+        major, minor = [int(x) for x in self._conf.version.split('.')]
+
+        if major % 2 == 0 and minor == 4:
+            lts = '_LTS'
+        name = "Ubuntu%s%s_64" % (major, lts)
+
+        if name not in self._ostypes:
+            return 'Ubuntu_64'
+
+        return name
+
+    def fedora(self):
         return "Fedora_64"
 
-    def debian(conf):
-        return "Debian%s_64" % conf.version
+    def debian(self):
+        name = "Debian%s_64" % self._conf.version
+        if name not in self._ostypes:
+            return 'Debian_64'
+
+    def get(self):
+        if not hasattr(self, self._conf.distro):
+            return "Linux_64"
+
+        return getattr(self, self._conf.distro)()
 
 
 class VBoxManage:
@@ -779,12 +810,8 @@ class VBoxManage:
                '--nic1', 'nat',
                '--natpf1', f'boxpyssh,tcp,,{port},,22',
                '--graphicscontroller', 'vmsvga',
-               '--vram', '16']
-
-        if hasattr(OsTypes, conf.distro):
-            cmd.extend(['--ostype', getattr(OsTypes, conf.distro)(conf)])
-        else:
-            cmd.extend(['--ostype', 'Linux_64'])
+               '--vram', '16',
+               '--ostype', OsTypes(conf).get()]
 
         for count, (hostport, vmport) in enumerate(conf.forwarding.items(),
                                                    start=1):
