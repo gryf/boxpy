@@ -18,7 +18,7 @@ import requests
 import yaml
 
 
-__version__ = "1.9"
+__version__ = "1.9.1"
 
 CACHE_DIR = os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
 CLOUD_IMAGE = "ci.iso"
@@ -639,6 +639,8 @@ class OsTypes:
         name = "Debian%s_64" % self._conf.version
         if name not in self._ostypes:
             return 'Debian_64'
+
+        return name
 
     def get(self):
         if not hasattr(self, self._conf.distro):
