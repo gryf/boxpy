@@ -18,11 +18,12 @@ import requests
 import yaml
 
 
-__version__ = "1.9.1"
+__version__ = "1.9.2"
 
 CACHE_DIR = os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
 CLOUD_IMAGE = "ci.iso"
-FEDORA_RELEASE_MAP = {'32': '1.6', '33': '1.2', '34': '1.2'}
+FEDORA_RELEASE_MAP = {'32': '1.6', '33': '1.2', '34': '1.2', '35': '1.2',
+                      '36': '1.5', '37': '1.7', '38': '1.6'}
 DEBIAN_CODENAME_MAP = {'12': 'bookworm', '11': 'bullseye', '10': 'buster'}
 TYPE_MAP = {'HardDisk': 'disk', 'DVD': 'dvd', 'Floppy': 'floppy'}
 DISTRO_MAP = {'ubuntu': 'Ubuntu', 'fedora': 'Fedora',
@@ -1203,17 +1204,17 @@ DISTROS = {'ubuntu': {'username': 'ubuntu',
                       'realname': 'fedora',
                       'img_class': Fedora,
                       'amd64': 'x86_64',
-                      'default_version': '34'},
+                      'default_version': '38'},
            'centos': {'username': 'centos',
                       'realname': 'centos',
                       'img_class': CentosStream,
                       'amd64': 'x86_64',
-                      'default_version': '8'},
+                      'default_version': '9'},
            'debian': {'username': 'debian',
                       'realname': 'debian',
                       'img_class': Debian,
                       'amd64': 'amd64',
-                      'default_version': '11'}}
+                      'default_version': '12'}}
 
 
 def get_image_object(vbox, version, image='ubuntu', arch='amd64'):
