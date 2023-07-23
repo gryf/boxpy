@@ -29,10 +29,10 @@ packages:
   - vim-nox
   - xinit
 runcmd:
-  - [su, -, ubuntu, -c, "git clone https://github.com/gryf/wmaker -b experimental"]
-  - [su, -, ubuntu, -c, "git clone https://github.com/gryf/vmstrap"]
-  - [su, -, ubuntu, -c, "vmstrap/bootstrap.sh -c"]
-  - [rm, -fr, /home/ubuntu/vmstrap]
+  - su - ubuntu -c "git clone https://github.com/gryf/wmaker -b experimental"
+  - su - ubuntu -c "git clone https://github.com/gryf/vmstrap"
+  - su - ubuntu -c "vmstrap/bootstrap.sh -c"
+  - rm -fr /home/ubuntu/vmstrap
 boxpy_data:
   key: vm
   cpus: 4
