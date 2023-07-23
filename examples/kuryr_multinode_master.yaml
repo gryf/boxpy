@@ -7,7 +7,7 @@ packages:
   - ipython3
   - jq
   - mc
-  - python-apsw
+  - python3-apsw
   - python3-flake8
   - python3-jedi
   - python3-pip
@@ -122,6 +122,7 @@ write_files:
 
       # Vars
       ADMIN_PASSWORD="secretadmin"
+      CONTAINER_ENGINE="crio"
       DATABASE_PASSWORD="secretdatabase"
       ETCD_USE_RAMDISK="True"
 
@@ -131,9 +132,10 @@ write_files:
       KURYR_K8S_MULTI_WORKER_TESTS="True"
       KURYR_K8S_OCTAVIA_MEMBER_MODE="L2"
       KURYR_LB_ALGORITHM="SOURCE_IP_PORT"
-      KURYR_NEUTRON_DEFAULT_ROUTER="router1"
+      KURYR_NEUTRON_DEFAULT_ROUTER="kuryr-router"
       KURYR_SG_DRIVER="policy"
       KURYR_SUBNET_DRIVER="namespace"
+      KURYR_SUPPORT_POD_SECURITY="True"
 
       LOGFILE="/opt/stack/logs/devstacklog.txt"
       LOG_COLOR="False"
@@ -142,10 +144,11 @@ write_files:
       OCTAVIA_AMP_IMAGE_NAME="test-only-amphora-x64-haproxy-ubuntu-bionic"
       OCTAVIA_AMP_IMAGE_SIZE="3"
 
-      OVN_BRANCH="v20.06.2"
+      OVN_BRANCH="v21.06.0"
       OVN_BUILD_FROM_SOURCE="True"
       OVN_DBS_LOG_LEVEL="dbg"
       OVN_L3_CREATE_PUBLIC_NETWORK="True"
+      OVS_BRANCH="a4b04276ab5934d087669ff2d191a23931335c87"
 
       VAR_RUN_PATH="/usr/local/var/run"
 
@@ -167,23 +170,25 @@ write_files:
       enable_plugin octavia-tempest-plugin https://opendev.org/openstack/octavia-tempest-plugin
       enable_plugin ovn-octavia-provider https://opendev.org/openstack/ovn-octavia-provider
 
-      [[post-config|$OCTAVIA_CONF]]
+      [[post-config|$$OCTAVIA_CONF]]
       [api_settings]
       enabled_provider_drivers = amphora:'Octavia Amphora driver',ovn:'Octavia OVN driver'
 runcmd:
-  - [apt, purge, '-y', python3-pyasn1-modules]
-  - [apt, purge, '-y', python3-simplejson]
-  - [su, -, ubuntu, -c, "git clone https://github.com/gryf/vmstrap"]
-  - [su, -, ubuntu, -c, "vmstrap/bootstrap.sh -c"]
-  - [rm, -fr, /home/ubuntu/vmstrap]
-  - [su, -, ubuntu, -c, "echo 'export HOST_IP=192.168.10.10' >> .bashrc"]
-  - [su, -, ubuntu, -c, "cp /tmp/local.conf /home/ubuntu/devstack/"]
-  - [systemctl, restart, systemd-networkd]
+  - systemctl stop systemd-resolved.service
+  - systemctl disable systemd-resolved.service
+  - echo "nameserver 1.1.1.1" > /etc/resolv.conf
+  - apt purge -y snapd
+  - apt purge -y python3-pyasn1-modules
+  - apt purge -y python3-simplejson
+  - su - ubuntu -c "git clone https://opendev.org/openstack/devstack"
+  - su - ubuntu -c "cp /tmp/local.conf /home/ubuntu/devstack/"
+  - su - ubuntu -c "echo 'export HOST_IP=192.168.10.10' >> .bashrc"
+  - systemctl restart systemd-networkd
 boxpy_data:
   key: vm
   cpus: 4
   memory: 16GB
   disk_size: 50GB
+  version: 20.04
   advanced:
     nic2: intnet
-  version: 20.04

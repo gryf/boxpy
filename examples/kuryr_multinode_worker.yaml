@@ -7,7 +7,7 @@ packages:
   - ipython3
   - jq
   - mc
-  - python-apsw
+  - python3-apsw
   - python3-flake8
   - python3-jedi
   - python3-pip
@@ -79,6 +79,7 @@ write_files:
 
       # Vars
       ADMIN_PASSWORD="secretadmin"
+      CONTAINER_ENGINE="crio"
       DATABASE_HOST="192.168.10.10"
       DATABASE_PASSWORD="secretdatabase"
       ENABLE_CHASSIS_AS_GW="False"
@@ -89,7 +90,7 @@ write_files:
       KURYR_EP_DRIVER_OCTAVIA_PROVIDER="ovn"
       KURYR_K8S_OCTAVIA_MEMBER_MODE="L2"
       KURYR_LB_ALGORITHM="SOURCE_IP_PORT"
-      KURYR_NEUTRON_DEFAULT_ROUTER="router1"
+      KURYR_NEUTRON_DEFAULT_ROUTER="kuryr-router"
       VAR_RUN_PATH="/usr/local/var/run"
 
       KURYR_ENABLED_HANDLERS="vif,endpoints,service,namespace,pod_label,policy,kuryrnetworkpolicy,kuryrnetwork,kuryrport,kuryrloadbalancer"
@@ -97,10 +98,11 @@ write_files:
       KURYR_SUBNET_DRIVER="namespace"
 
 
-      OVN_BRANCH="v20.06.2"
+      OVN_BRANCH="v21.06.0"
       OVN_BUILD_FROM_SOURCE="True"
       OVN_DBS_LOG_LEVEL="dbg"
       OVN_L3_CREATE_PUBLIC_NETWORK="True"
+      OVS_BRANCH="a4b04276ab5934d087669ff2d191a23931335c87"
 
 
       LIBVIRT_TYPE="qemu"
@@ -120,19 +122,21 @@ write_files:
       enable_plugin devstack-plugin-container https://opendev.org/openstack/devstack-plugin-container
       enable_plugin kuryr-kubernetes https://opendev.org/openstack/kuryr
 runcmd:
-  - [apt, purge, '-y', python3-pyasn1-modules]
-  - [apt, purge, '-y', python3-simplejson]
-  - [su, -, ubuntu, -c, "git clone https://github.com/gryf/vmstrap"]
-  - [su, -, ubuntu, -c, "vmstrap/bootstrap.sh -c"]
-  - [rm, -fr, /home/ubuntu/vmstrap]
-  - [su, -, ubuntu, -c, "echo 'export HOST_IP=192.168.10.11' >> .bashrc"]
-  - [su, -, ubuntu, -c, "cp /tmp/local.conf /home/ubuntu/devstack/"]
-  - [systemctl, restart, systemd-networkd]
+  - systemctl stop systemd-resolved.service
+  - systemctl disable systemd-resolved.service
+  - echo "nameserver 1.1.1.1" > /etc/resolv.conf
+  - apt purge -y snapd
+  - apt purge -y python3-pyasn1-modules
+  - apt purge -y python3-simplejson
+  - su - ubuntu -c "git clone https://opendev.org/openstack/devstack"
+  - su - ubuntu -c "cp /tmp/local.conf /home/ubuntu/devstack/"
+  - su - ubuntu -c "echo 'export HOST_IP=192.168.10.11' >> .bashrc"
+  - systemctl restart systemd-networkd
 boxpy_data:
   key: vm
   cpus: 4
   memory: 16GB
   disk_size: 50GB
+  version: 20.04
   advanced:
     nic2: intnet
-  version: 20.04
