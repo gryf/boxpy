@@ -22,8 +22,7 @@ __version__ = "1.9.2"
 
 CACHE_DIR = os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
 CLOUD_IMAGE = "ci.iso"
-FEDORA_RELEASE_MAP = {'32': '1.6', '33': '1.2', '34': '1.2', '35': '1.2',
-                      '36': '1.5', '37': '1.7', '38': '1.6'}
+FEDORA_RELEASE_MAP = {'37': '1.7', '38': '1.6', '39': '1.5'}
 DEBIAN_CODENAME_MAP = {'12': 'bookworm', '11': 'bullseye', '10': 'buster'}
 TYPE_MAP = {'HardDisk': 'disk', 'DVD': 'dvd', 'Floppy': 'floppy'}
 DISTRO_MAP = {'ubuntu': 'Ubuntu', 'fedora': 'Fedora',
@@ -1204,7 +1203,7 @@ DISTROS = {'ubuntu': {'username': 'ubuntu',
                       'realname': 'fedora',
                       'img_class': Fedora,
                       'amd64': 'x86_64',
-                      'default_version': '38'},
+                      'default_version': '39'},
            'centos': {'username': 'centos',
                       'realname': 'centos',
                       'img_class': CentosStream,

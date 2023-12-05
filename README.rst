@@ -55,25 +55,25 @@ or simply link it somewhere in the path:
    $ chmod +x ~/bin/boxpy
 
 and now you can issue some command. For example, to spin up a VM with Ubuntu
-18.04 with one CPU, 1GB of memory and 6GB of disk:
+20.04 with one CPU, 1GB of memory and 6GB of disk:
 
 .. code:: shell-session
 
-   $ boxpy create --version 18.04 myvm
+   $ boxpy create --version 20.04 myvm
 
 note, that Ubuntu is default distribution you don't need to specify
 ``--distro`` nor ``--version`` it will pick up latest LTS version. Now, let's
-recreate it with 20.04:
+recreate it with 22.04:
 
 .. code:: shell-session
 
-   $ boxpy rebuild --version 20.04 myvm
+   $ boxpy rebuild --version 22.04 myvm
 
 or recreate it with Fedora and add additional CPU:
 
 .. code:: shell-session
 
-   $ boxpy rebuild --distro fedora --version 34 --cpu 2 myvm
+   $ boxpy rebuild --distro fedora --version 39 --cpu 2 myvm
 
 now, let's connect to the VM using either ssh command, which is printed out at
 as last ``boxpy`` output line, or simply by using ssh boxpy command:
