@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "boxpy"
+dynamic = ["version"]
+authors = [
+    {name = "Roman Dobosz", email = "gryf73@gmail.com"}
+]
+license = {text = "GPLv3"}
+description = "Run Linux cloud image on top of VirtualBox using commandline tool"
+readme = "README.rst"
+requires-python = ">=3.8"
+keywords = ["vboxmanage", "virtualbox", "vm", "virtual machine", "automation"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "Topic :: Terminals",
+    "Topic :: Utilities",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3 :: Only"
+]
+dependencies = [
+    "pyyaml>=5.4.1",
+    "requests>=2.26.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/gryf/boxpy"
+
+[project.scripts]
+boxpy = "box:main"
+
+[tool.setuptools]
+py-modules = ["box"]
+
+[tool.setuptools.dynamic]
+version = {attr = "box.__version__"}
+
+[tool.distutils.bdist_wheel]
+universal = true

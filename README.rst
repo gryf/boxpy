@@ -29,25 +29,52 @@ Requirements
   formats
 
 
+Tested distros
+--------------
+
+- Ubuntu
+  - 18.04
+  - 20.04
+  - 22.04
+- Fedora
+  - 37
+  - 38
+  - 39
+- Centos Stream
+  - 8
+  - 9
+- Debian
+  - 10 (buster)
+  - 11 (bullseye)
+  - 12 (bookworm)
+
+There is possibility to use whatever OS image which supports cloud-init. Use
+the ``--image`` param for ``create`` command to pass image filename, although
+it's wise to at least discover (or not, but it may be easier in certain
+distributions) what username is supposed to be used as a default user and pass
+it with ``--username`` param.
+
+
 How to run it
 -------------
 
 First, make sure you fulfill the requirements; either by using packages from
-your operating system, or by using virtualenv for Python requirements, i.e.:
+your operating system, or by using virtualenv, i.e.:
 
 .. code:: shell-session
 
    $ python -m virtualenv .venv
    $ . .venv/bin/activate
-   (.venv) $ pip install -r requirements.txt
+   (.venv) $ pip install .
 
-then you can issue:
+You'll have ``boxpy`` command created for you as well.
 
 .. code:: shell-session
 
-   $ alias boxpy='python /path/to/box.py'
+   $ boxpy -V
+   boxpy 1.9.2
 
-or simply link it somewhere in the path:
+Other option is simply link it somewhere in the path:
 
 .. code:: shell-session
 
