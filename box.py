@@ -22,9 +22,6 @@ __version__ = "1.9.2"
 
 CACHE_DIR = os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
 CLOUD_IMAGE = "ci.iso"
-FEDORA_RELEASE_MAP = {'37': '1.7', '38': '1.6', '39': '1.5', '40': '1.14'}
-DEBIAN_CODENAME_MAP = {'13': 'trixie', '12': 'bookworm', '11': 'bullseye',
-                       '10': 'buster'}
 TYPE_MAP = {'HardDisk': 'disk', 'DVD': 'dvd', 'Floppy': 'floppy'}
 DISTRO_MAP = {'ubuntu': 'Ubuntu', 'fedora': 'Fedora',
               'centos': 'Centos Stream', 'debian': 'Debian'}
@@ -985,7 +982,7 @@ class Image:
     IMG = ""
     CHECKSUMTOOL = 'sha256sum'
 
-    def __init__(self, vbox, version, arch, release, fname=None):
+    def __init__(self, vbox, version, arch, fname=None):
         self.vbox = vbox
         self._tmp = tempfile.mkdtemp(prefix='boxpy_')
         self._img_fname = fname
@@ -1067,8 +1064,8 @@ class Ubuntu(Image):
     URL = "https://cloud-images.ubuntu.com/releases/%s/release/%s"
     IMG = "ubuntu-%s-server-cloudimg-%s.img"
 
-    def __init__(self, vbox, version, arch, release, fname=None):
-        super().__init__(vbox, version, arch, release)
+    def __init__(self, vbox, version, arch, fname=None):
+        super().__init__(vbox, version, arch)
         self._img_fname = self.IMG % (version, arch)
         self._img_url = self.URL % (version, self._img_fname)
         self._checksum_file = 'SHA256SUMS'
@@ -1090,13 +1087,18 @@ class Debian(Image):
     URL = "https://cloud.debian.org/images/cloud/%s/daily/latest/%s"
     IMG = "debian-%s-generic-%s-daily.qcow2"
     CHECKSUMTOOL = 'sha512sum'
+    CODENAME_MAP = {'13': 'trixie',
+                    '12': 'bookworm',
+                    '11': 'bullseye',
+                    '10': 'buster'}
 
-    def __init__(self, vbox, version, arch, release, fname=None):
-        super().__init__(vbox, version, arch, release)
+    def __init__(self, vbox, version, arch, fname=None):
+        super().__init__(vbox, version, arch)
+        codename = self.CODENAME_MAP[version]
         self._img_fname = self.IMG % (version, arch)
-        self._img_url = self.URL % (release, self._img_fname)
+        self._img_url = self.URL % (codename, self._img_fname)
         self._checksum_file = 'SHA512SUMS'
-        self._checksum_url = self.URL % (release, self._checksum_file)
+        self._checksum_url = self.URL % (codename, self._checksum_file)
 
     def _get_checksum(self, fname):
         expected_sum = None
@@ -1115,16 +1117,21 @@ class Fedora(Image):
            "Cloud/%s/images/%s")
     IMG = "Fedora-Cloud-Base-%s-%s.%s.qcow2"
     CHKS = "Fedora-Cloud-%s-%s-%s-CHECKSUM"
+    REVISION = {'37': '1.7',
+                '38': '1.6',
+                '39': '1.5',
+                '40': '1.14'}
 
-    def __init__(self, vbox, version, arch, release, fname=None):
-        super().__init__(vbox, version, arch, release)
+    def __init__(self, vbox, version, arch, fname=None):
+        super().__init__(vbox, version, arch)
+        revision = self.REVISION[version]
         if int(version) > 39:
             self.IMG = "Fedora-Cloud-Base-Generic.%s-%s-%s.qcow2"
-            self._img_fname = self.IMG % (arch, version, release)
+            self._img_fname = self.IMG % (arch, version, revision)
         else:
-            self._img_fname = self.IMG % (version, release, arch)
+            self._img_fname = self.IMG % (version, revision, arch)
         self._img_url = self.URL % (version, arch, self._img_fname)
-        self._checksum_file = self.CHKS % (version, release, arch)
+        self._checksum_file = self.CHKS % (version, revision, arch)
         self._checksum_url = self.URL % (version, arch, self._checksum_file)
 
     def _get_checksum(self, fname):
@@ -1221,13 +1228,8 @@ DISTROS = {'ubuntu': {'username': 'ubuntu',
 
 
 def get_image_object(vbox, version, image='ubuntu', arch='amd64'):
-    release = None
-    if image == 'fedora':
-        release = FEDORA_RELEASE_MAP[version]
-    if image == 'debian':
-        release = DEBIAN_CODENAME_MAP[version]
     return DISTROS[image]['img_class'](vbox, version, DISTROS[image]['amd64'],
-                                       release, DISTROS[image].get('image'))
+                                       DISTROS[image].get('image'))
 
 
 class IsoImage:
