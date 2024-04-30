@@ -36,10 +36,12 @@ Tested distros
   - 18.04
   - 20.04
   - 22.04
+  - 24.04
 - Fedora
   - 37
   - 38
   - 39
+  - 40
 - Centos Stream
   - 8
   - 9
@@ -47,6 +49,7 @@ Tested distros
   - 10 (buster)
   - 11 (bullseye)
   - 12 (bookworm)
+  - 13 (trixie) - prerelease
 
 There is possibility to use whatever OS image which supports cloud-init. Use
 the ``--image`` param for ``create`` command to pass image filename, although

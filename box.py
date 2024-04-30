@@ -22,8 +22,9 @@ __version__ = "1.9.2"
 
 CACHE_DIR = os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
 CLOUD_IMAGE = "ci.iso"
-FEDORA_RELEASE_MAP = {'37': '1.7', '38': '1.6', '39': '1.5'}
-DEBIAN_CODENAME_MAP = {'12': 'bookworm', '11': 'bullseye', '10': 'buster'}
+FEDORA_RELEASE_MAP = {'37': '1.7', '38': '1.6', '39': '1.5', '40': '1.14'}
+DEBIAN_CODENAME_MAP = {'13': 'trixie', '12': 'bookworm', '11': 'bullseye',
+                       '10': 'buster'}
 TYPE_MAP = {'HardDisk': 'disk', 'DVD': 'dvd', 'Floppy': 'floppy'}
 DISTRO_MAP = {'ubuntu': 'Ubuntu', 'fedora': 'Fedora',
               'centos': 'Centos Stream', 'debian': 'Debian'}
@@ -1047,8 +1048,7 @@ class Image:
             return True
 
         fname = os.path.join(CACHE_DIR, self._img_fname)
-        LOG.header('Downloading image %s from %s', self._img_fname,
-                   self._img_url)
+        LOG.header('Downloading image %s', self._img_url)
         Run(['wget', '-q', self._img_url, '-O', fname])
 
         if not self._checksum():
@@ -1118,7 +1118,11 @@ class Fedora(Image):
 
     def __init__(self, vbox, version, arch, release, fname=None):
         super().__init__(vbox, version, arch, release)
-        self._img_fname = self.IMG % (version, release, arch)
+        if int(version) > 39:
+            self.IMG = "Fedora-Cloud-Base-Generic.%s-%s-%s.qcow2"
+            self._img_fname = self.IMG % (arch, version, release)
+        else:
+            self._img_fname = self.IMG % (version, release, arch)
         self._img_url = self.URL % (version, arch, self._img_fname)
         self._checksum_file = self.CHKS % (version, release, arch)
         self._checksum_url = self.URL % (version, arch, self._checksum_file)
@@ -1198,12 +1202,12 @@ DISTROS = {'ubuntu': {'username': 'ubuntu',
                       'realname': 'ubuntu',
                       'img_class': Ubuntu,
                       'amd64': 'amd64',
-                      'default_version': '22.04'},
+                      'default_version': '24.04'},
            'fedora': {'username': 'fedora',
                       'realname': 'fedora',
                       'img_class': Fedora,
                       'amd64': 'x86_64',
-                      'default_version': '39'},
+                      'default_version': '40'},
            'centos': {'username': 'centos',
                       'realname': 'centos',
                       'img_class': CentosStream,
