@@ -18,7 +18,7 @@ import requests
 import yaml
 
 
-__version__ = "1.9.2"
+__version__ = "1.10.0"
 
 CACHE_DIR = os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
 CLOUD_IMAGE = "ci.iso"
@@ -673,7 +673,7 @@ class VBoxManage:
         dom = xml.dom.minidom.parse(path)
         if len(dom.getElementsByTagName('HardDisk')) != 1:
             # don't know what to do with multiple discs
-            raise BoxError()
+            raise BoxError
 
         disk = dom.getElementsByTagName('HardDisk')[0]
         location = disk.getAttribute('location')
@@ -816,7 +816,8 @@ class VBoxManage:
                 self.uuid = line.split('UUID:')[1].strip()
 
         if not self.uuid:
-            raise BoxVBoxFailure(f'Cannot create VM "{self.name_or_uuid}".')
+            msg = f'Cannot create VM "{self.name_or_uuid}".'
+            raise BoxVBoxFailure(msg)
 
         port = conf.port if conf.port else self._find_unused_port()
 
@@ -839,14 +840,14 @@ class VBoxManage:
 
         if Run(cmd).returncode != 0:
             LOG.fatal(f'Cannot modify VM "{self.name_or_uuid}"')
-            raise BoxVBoxFailure()
+            raise BoxVBoxFailure
 
         if conf.disable_nested == 'False':
             if Run(['vboxmanage', 'modifyvm', self.name_or_uuid,
                     '--nested-hw-virt', 'on']).returncode != 0:
                 LOG.fatal(f'Cannot set nested virtualization for VM '
                           f'"{self.name_or_uuid}"')
-                raise BoxVBoxFailure()
+                raise BoxVBoxFailure
 
         return self.uuid
 
@@ -882,7 +883,7 @@ class VBoxManage:
         if Run(['vboxmanage', 'modifymedium', 'disk', src, '--resize',
                 str(size), '--move', fullpath]).returncode != 0:
             LOG.fatal('Resizing and moving image %s has failed', dst)
-            raise BoxVBoxFailure()
+            raise BoxVBoxFailure
         return fullpath
 
     def storageattach(self, controller_name, port, type_, image):
@@ -906,7 +907,7 @@ class VBoxManage:
         if Run(['vboxmanage', 'startvm', self.name_or_uuid, '--type',
                 type_]).returncode != 0:
             LOG.fatal('Failed to start: %s', self.name_or_uuid)
-            raise BoxVBoxFailure()
+            raise BoxVBoxFailure
 
     def setextradata(self, key, val):
         res = Run(['vboxmanage', 'setextradata', self.name_or_uuid, key, val])
@@ -920,7 +921,7 @@ class VBoxManage:
         if Run(['vboxmanage', 'modifyvm', self.name_or_uuid, f'--{nic}',
                 kind]).returncode != 0:
             LOG.fatal('Cannot modify VM "%s"', self.name_or_uuid)
-            raise BoxVBoxFailure()
+            raise BoxVBoxFailure
 
     def is_port_in_use(self, port):
         used_ports = self._get_defined_ports()
@@ -1057,7 +1058,7 @@ class Image:
         return True
 
     def _get_checksum(self, fname):
-        raise NotImplementedError()
+        raise NotImplementedError
 
 
 class Ubuntu(Image):
