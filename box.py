@@ -18,7 +18,7 @@ import requests
 import yaml
 
 
-__version__ = "1.10.0"
+__version__ = "1.10.1"
 
 CACHE_DIR = os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
 CLOUD_IMAGE = "ci.iso"
@@ -218,8 +218,22 @@ _boxpy() {
             fi
             ;;
         stop)
+            items=(--poweroff)
             if [[ ${prev} == ${cmd} ]]; then
-                _vms_comp runningvms
+                if [[ ${cmd} = "stop" ]]; then
+                    _vms_comp runningvms
+                else
+                    COMPREPLY=( $(compgen -W "${items[*]}" -- ${cur}) )
+                fi
+            else
+                _get_excluded_items "${items[@]}"
+                COMPREPLY=( $(compgen -W "$result" -- ${cur}) )
+
+                case "${prev}" in
+                    --*)
+                        COMPREPLY=( )
+                        ;;
+                esac
             fi
             ;;
     esac
@@ -1611,7 +1625,7 @@ def connect(args):
     return Run(cmd, False).returncode
 
 
-def _set_vmstate(name, state, guitype=None):
+def _set_vmstate(name, state, guitype=None, poweroff=False):
 
     vbox = VBoxManage(name)
     if not vbox.get_vm_info():
@@ -1628,16 +1642,18 @@ def _set_vmstate(name, state, guitype=None):
 
     if state == "start":
         vbox.poweron(guitype)
+    elif poweroff:
+        vbox.poweroff()
     else:
         vbox.acpipowerbutton()
 
 
 def vmstart(args):
-    _set_vmstate(args.name, 'start', args.type)
+    _set_vmstate(args.name, 'start', guitype=args.type)
 
 
 def vmstop(args):
-    _set_vmstate(args.name, 'stop')
+    _set_vmstate(args.name, 'stop', poweroff=args.poweroff)
 
 
 def main():
@@ -1755,6 +1771,8 @@ def main():
 
     stop = subparsers.add_parser('stop', help='stop VM')
     stop.add_argument('name', help='name or UUID of the VM')
+    stop.add_argument('-p', '--poweroff', action='store_true', help='poweroff '
+                      'machine instead of using ACPI power signal')
     stop.set_defaults(func=vmstop)
 
     completion = subparsers.add_parser('completion', help='generate shell '
