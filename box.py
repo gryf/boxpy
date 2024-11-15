@@ -1038,6 +1038,7 @@ class Image:
             return False
 
         LOG.info('Calculating checksum for "%s"', self._img_fname)
+        LOG.debug('Checksum file: "%s"', self._checksum_file)
         fname = os.path.join(self._tmp, self._checksum_file)
         expected_sum = self._get_checksum(fname)
 
@@ -1135,14 +1136,23 @@ class Fedora(Image):
     REVISION = {'37': '1.7',
                 '38': '1.6',
                 '39': '1.5',
-                '40': '1.14'}
+                '40': '1.14',
+                '41': '1.4'}
 
     def __init__(self, vbox, version, arch, fname=None):
         super().__init__(vbox, version, arch)
         revision = self.REVISION[version]
-        if int(version) > 39:
-            self.IMG = "Fedora-Cloud-Base-Generic.%s-%s-%s.qcow2"
-            self._img_fname = self.IMG % (arch, version, revision)
+        if int(version) >= 40:
+            if int(version) == 40:
+                # Started from Fedora 40 there is "Generic" in the image names.
+                self.IMG = "Fedora-Cloud-Base-Generic.%s-%s-%s.qcow2"
+                # Fedora 40 have messed up position of the items in filename.
+                self._img_fname = self.IMG % (arch, version, revision)
+            else:
+                # But in Fedora 41 there is no dot between Generic and
+                # version, but between version and arch.
+                self.IMG = "Fedora-Cloud-Base-Generic-%s-%s.%s.qcow2"
+                self._img_fname = self.IMG % (version, revision, arch)
         else:
             self._img_fname = self.IMG % (version, revision, arch)
         self._img_url = self.URL % (version, arch, self._img_fname)
@@ -1229,7 +1239,7 @@ DISTROS = {'ubuntu': {'username': 'ubuntu',
                       'realname': 'fedora',
                       'img_class': Fedora,
                       'amd64': 'x86_64',
-                      'default_version': '40'},
+                      'default_version': '41'},
            'centos': {'username': 'centos',
                       'realname': 'centos',
                       'img_class': CentosStream,

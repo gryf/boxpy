@@ -42,6 +42,7 @@ Tested distros
   - 38
   - 39
   - 40
+  - 41
 - Centos Stream
   - 8
   - 9
