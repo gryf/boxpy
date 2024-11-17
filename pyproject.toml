@@ -24,6 +24,7 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3 :: Only"
 ]
 dependencies = [
@@ -45,3 +46,25 @@ version = {attr = "box.__version__"}
 
 [tool.distutils.bdist_wheel]
 universal = true
+
+[tool.ruff]
+line-length = 79
+indent-width = 4
+
+[tool.ruff.lint]
+extend-select = [
+    "B",  # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "E",  # pycodestyle
+    "F",  # pyflakes
+    "FA",  # flake8-future-annotations
+    "G",  # flake8-logging-format
+    "N",  # pep8-naming
+    "PGH",  # pygrep-hooks
+    "PIE",  # flake8-pie
+    "RET",  # flake8-return
+    "SIM",  # flake8-simplify
+    "UP",  # pyupgrade
+    "W",  # pycodestyle
+    "YTT",  # flake8-2020
+]

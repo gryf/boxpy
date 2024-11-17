@@ -18,7 +18,7 @@ import requests
 import yaml
 
 
-__version__ = "1.10.1"
+__version__ = "1.11.0"
 
 CACHE_DIR = os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
 CLOUD_IMAGE = "ci.iso"
@@ -275,28 +275,28 @@ class Run:
     Helper class on subprocess.run()
     command is a list with command and its params to execute
     """
-    def __init__(self, command, capture_output=True):
-        result = subprocess.run(command, encoding='utf-8',
-                                capture_output=capture_output)
-        if result.stdout:
-            LOG.debug2(result.stdout)
-        if result.stderr:
-            LOG.debug2(result.stderr)
+    def __init__(self, command):
+        result = subprocess.run(command, encoding='utf-8', capture_output=True)
 
         self.returncode = result.returncode
         self.stdout = result.stdout.strip() if result.stdout else ''
         self.stderr = result.stderr.strip() if result.stderr else ''
+
+        if self.stdout:
+            LOG.debug2(self.stdout)
+        if self.stderr:
+            LOG.debug2(self.stderr)
 
 
 class BoxError(Exception):
     pass
 
 
-class BoxNotFound(BoxError):
+class BoxNotFoundError(BoxError):
     pass
 
 
-class BoxVBoxFailure(BoxError):
+class BoxVBoxError(BoxError):
     pass
 
 
@@ -524,7 +524,7 @@ class Config:
     def _read_filename(self, fname):
         fullpath = os.path.expanduser(os.path.expandvars(fname))
         if not os.path.exists(fullpath):
-            return
+            return None
 
         with open(fname) as fobj:
             return fobj.read()
@@ -633,11 +633,11 @@ class OsTypes:
 
     def ubuntu(self):
         lts = ''
-        major, minor = [int(x) for x in self._conf.version.split('.')]
+        major, minor = (int(x) for x in self._conf.version.split('.'))
 
         if major % 2 == 0 and minor == 4:
             lts = '_LTS'
-        name = "Ubuntu%s%s_64" % (major, lts)
+        name = f"Ubuntu{major}{lts}_64"
 
         if name not in self._ostypes:
             return 'Ubuntu_64'
@@ -648,7 +648,7 @@ class OsTypes:
         return "Fedora_64"
 
     def debian(self):
-        name = "Debian%s_64" % self._conf.version
+        name = f"Debian{self._conf.version}_64"
         if name not in self._ostypes:
             return 'Debian_64'
 
@@ -674,7 +674,7 @@ class VBoxManage:
     def get_vm_base_path(self):
         path = self._get_vm_config()
         if not path:
-            return
+            return None
 
         return os.path.dirname(path)
 
@@ -682,7 +682,7 @@ class VBoxManage:
         path = self._get_vm_config()
         if not path:
             LOG.warning('Configuration for "%s" not found', self.name_or_uuid)
-            return
+            return None
 
         dom = xml.dom.minidom.parse(path)
         if len(dom.getElementsByTagName('HardDisk')) != 1:
@@ -709,6 +709,7 @@ class VBoxManage:
                     return line
 
                 return line.split(' ')[0].strip()
+        return None
 
     def get_vm_info(self):
         out = Run(['vboxmanage', 'showvminfo', self.name_or_uuid])
@@ -809,6 +810,7 @@ class VBoxManage:
                 '--delete']).returncode != 0:
             LOG.fatal('Removing VM "%s" failed', self.name_or_uuid)
             return 7
+        return None
 
     def create(self, conf):
         memory = convert_to_mega(conf.memory)
@@ -831,7 +833,7 @@ class VBoxManage:
 
         if not self.uuid:
             msg = f'Cannot create VM "{self.name_or_uuid}".'
-            raise BoxVBoxFailure(msg)
+            raise BoxVBoxError(msg)
 
         port = conf.port if conf.port else self._find_unused_port()
 
@@ -854,14 +856,15 @@ class VBoxManage:
 
         if Run(cmd).returncode != 0:
             LOG.fatal(f'Cannot modify VM "{self.name_or_uuid}"')
-            raise BoxVBoxFailure
+            raise BoxVBoxError
 
-        if conf.disable_nested == 'False':
-            if Run(['vboxmanage', 'modifyvm', self.name_or_uuid,
-                    '--nested-hw-virt', 'on']).returncode != 0:
-                LOG.fatal(f'Cannot set nested virtualization for VM '
-                          f'"{self.name_or_uuid}"')
-                raise BoxVBoxFailure
+        if conf.disable_nested == 'False' and Run(['vboxmanage', 'modifyvm',
+                                                   self.name_or_uuid,
+                                                   '--nested-hw-virt',
+                                                   'on']).returncode != 0:
+            LOG.fatal(f'Cannot set nested virtualization for VM '
+                      f'"{self.name_or_uuid}"')
+            raise BoxVBoxError
 
         return self.uuid
 
@@ -897,7 +900,7 @@ class VBoxManage:
         if Run(['vboxmanage', 'modifymedium', 'disk', src, '--resize',
                 str(size), '--move', fullpath]).returncode != 0:
             LOG.fatal('Resizing and moving image %s has failed', dst)
-            raise BoxVBoxFailure
+            raise BoxVBoxError
         return fullpath
 
     def storageattach(self, controller_name, port, type_, image):
@@ -921,7 +924,7 @@ class VBoxManage:
         if Run(['vboxmanage', 'startvm', self.name_or_uuid, '--type',
                 type_]).returncode != 0:
             LOG.fatal('Failed to start: %s', self.name_or_uuid)
-            raise BoxVBoxFailure
+            raise BoxVBoxError
 
     def setextradata(self, key, val):
         res = Run(['vboxmanage', 'setextradata', self.name_or_uuid, key, val])
@@ -935,7 +938,7 @@ class VBoxManage:
         if Run(['vboxmanage', 'modifyvm', self.name_or_uuid, f'--{nic}',
                 kind]).returncode != 0:
             LOG.fatal('Cannot modify VM "%s"', self.name_or_uuid)
-            raise BoxVBoxFailure
+            raise BoxVBoxError
 
     def is_port_in_use(self, port):
         used_ports = self._get_defined_ports()
@@ -1062,7 +1065,10 @@ class Image:
 
         fname = os.path.join(CACHE_DIR, self._img_fname)
         LOG.header('Downloading image %s', self._img_url)
-        Run(['wget', '-q', self._img_url, '-O', fname])
+        result = Run(['wget', '-q', self._img_url, '-O', fname])
+        if result.returncode != 0:
+            LOG.fatal("Error downloading image %s", self._img_url)
+            return False
 
         if not self._checksum():
             # TODO: make some retry mechanism?
@@ -1180,8 +1186,7 @@ class CentosStream(Image):
 
     def __init__(self, vbox, version, arch, release, fname=None):
         super().__init__(vbox, version, arch, release)
-        self._checksum_file = '%s-centos-stream-%s-%s' % (self.CHKS, version,
-                                                          arch)
+        self._checksum_file = f'{self.CHKS}-centos-stream-{version}-{arch}'
         self._checksum_url = self.URL % (version, arch, self.CHKS)
         # there is assumption, that we always need latest relese for specific
         # version and architecture.
@@ -1208,6 +1213,7 @@ class CentosStream(Image):
         images.reverse()
         if images:
             return images[0]
+        return None
 
     def _get_checksum(self, fname):
         expected_sum = None
@@ -1336,9 +1342,8 @@ def vmcreate(args, conf=None):
         if not vbox.setextradata(key, getattr(conf, key)):
             return 5
 
-    if conf.user_data:
-        if not vbox.setextradata('user_data', conf.user_data):
-            return 6
+    if conf.user_data and not vbox.setextradata('user_data', conf.user_data):
+        return 6
 
     if not vbox.setextradata('creator', 'boxpy'):
         return 13
@@ -1444,24 +1449,21 @@ def vmcreate(args, conf=None):
 
     # reread config to update fields
     conf = Config(args, vbox)
-    username = DISTROS[conf.distro]["username"]
-    LOG.info('You can access your VM by issuing:')
     if conf.username and conf.username != username:
-        LOG.info(f'ssh -p {conf.port} -i {conf.ssh_key_path[:-4]} '
-                 f'{conf.username}@localhost')
+        username = conf.username
     else:
-        LOG.info(f'ssh -p {conf.port} -i {conf.ssh_key_path[:-4]} '
-                 f'{username}@localhost')
+        username = DISTROS[conf.distro]["username"]
+    LOG.info('You can access your VM by issuing:')
+    LOG.info('ssh -p %s -i %s %s@localhost', conf.port, conf.ssh_key_path[:-4],
+             username)
     LOG.info('or simply:')
-    LOG.info(f'boxpy ssh {conf.name}')
+    LOG.info('boxpy ssh %s', conf.name)
     return 0
 
 
 def vmdestroy(args):
-    if isinstance(args.name, list):
-        vm_names = args.name
-    else:
-        vm_names = [args.name]
+
+    vm_names = args.name if isinstance(args.name, list) else [args.name]
 
     for name in vm_names:
         vbox = VBoxManage(name)
@@ -1555,7 +1557,8 @@ def vminfo(args):
             LOG.info(line)
 
     if 'user_data' in info:
-        LOG.info(f'User data file path:\t{info["user_data"]}')
+        LOG.info('User data file path:\t%s', info['user_data'])
+    return 0
 
 
 def vmrebuild(args):
@@ -1563,12 +1566,12 @@ def vmrebuild(args):
     if not vbox.get_vm_info():
         LOG.fatal(f'Cannot rebuild VM "{args.name}" - it doesn\'t exists.')
         return 20
-    else:
-        LOG.header('Rebuilding VM: %s', args.name)
+
+    LOG.header('Rebuilding VM: %s', args.name)
 
     try:
         conf = Config(args, vbox)
-    except BoxNotFound as ex:
+    except BoxNotFoundError as ex:
         LOG.fatal(f'Error with parsing config: {ex}')
         return 8
     except yaml.YAMLError:
@@ -1617,7 +1620,7 @@ def connect(args):
 
     try:
         conf = Config(args, vbox)
-    except BoxNotFound:
+    except BoxNotFoundError:
         return 11
     except yaml.YAMLError:
         LOG.fatal(f'Cannot read or parse file `{args.config}` as YAML '
@@ -1643,12 +1646,12 @@ def _set_vmstate(name, state, guitype=None, poweroff=False):
         return 20
 
     if vbox.running and state == "start":
-        LOG.info(f'VM "{name}" is already running.')
-        return
+        LOG.info('VM "%s" is already running.', name)
+        return 1
 
     if not vbox.running and state == "stop":
-        LOG.info(f'VM "{name}" is already stopped.')
-        return
+        LOG.info('VM "%s" is already stopped.', name)
+        return 1
 
     if state == "start":
         vbox.poweron(guitype)
@@ -1656,6 +1659,7 @@ def _set_vmstate(name, state, guitype=None, poweroff=False):
         vbox.poweroff()
     else:
         vbox.acpipowerbutton()
+    return 0
 
 
 def vmstart(args):
@@ -1808,7 +1812,7 @@ def main():
     LOG.set_verbose(args.verbose, args.quiet)
 
     if 'func' not in args and args.version:
-        LOG.info(f'boxpy {__version__}')
+        LOG.info('boxpy %s', __version__)
         parser.exit()
 
     if hasattr(args, 'func'):
@@ -1816,6 +1820,7 @@ def main():
 
     parser.print_help()
     parser.exit()
+    return 23
 
 
 if __name__ == '__main__':
