@@ -1635,7 +1635,7 @@ def connect(args):
            f'@localhost:{conf.port}']
     LOG.debug('Connecting to vm `%s` using command:\n%s', args.name,
               ' '.join(cmd))
-    return Run(cmd, False).returncode
+    return Run(cmd).returncode
 
 
 def _set_vmstate(name, state, guitype=None, poweroff=False):
