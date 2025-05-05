@@ -18,7 +18,7 @@ import requests
 import yaml
 
 
-__version__ = "1.11.0"
+__version__ = "1.11.1"
 
 CACHE_DIR = os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
 CLOUD_IMAGE = "ci.iso"
@@ -275,8 +275,9 @@ class Run:
     Helper class on subprocess.run()
     command is a list with command and its params to execute
     """
-    def __init__(self, command):
-        result = subprocess.run(command, encoding='utf-8', capture_output=True)
+    def __init__(self, command, capture=True):
+        result = subprocess.run(command, encoding='utf-8',
+                                capture_output=capture)
 
         self.returncode = result.returncode
         self.stdout = result.stdout.strip() if result.stdout else ''
@@ -1635,7 +1636,7 @@ def connect(args):
            f'@localhost:{conf.port}']
     LOG.debug('Connecting to vm `%s` using command:\n%s', args.name,
               ' '.join(cmd))
-    return Run(cmd).returncode
+    return Run(cmd, capture=False).returncode
 
 
 def _set_vmstate(name, state, guitype=None, poweroff=False):
