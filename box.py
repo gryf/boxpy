@@ -18,7 +18,7 @@ import requests
 import yaml
 
 
-__version__ = "1.11.1"
+__version__ = "1.11.2"
 
 CACHE_DIR = os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
 CLOUD_IMAGE = "ci.iso"
@@ -1144,7 +1144,8 @@ class Fedora(Image):
                 '38': '1.6',
                 '39': '1.5',
                 '40': '1.14',
-                '41': '1.4'}
+                '41': '1.4',
+                '42': '1.1'}
 
     def __init__(self, vbox, version, arch, fname=None):
         super().__init__(vbox, version, arch)

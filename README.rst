@@ -37,12 +37,14 @@ Tested distros
   - 20.04
   - 22.04
   - 24.04
+  - 25.04
 - Fedora
   - 37
   - 38
   - 39
   - 40
   - 41
+  - 42
 - Centos Stream
   - 8
   - 9
