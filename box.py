@@ -1145,7 +1145,8 @@ class Fedora(Image):
                 '39': '1.5',
                 '40': '1.14',
                 '41': '1.4',
-                '42': '1.1'}
+                '42': '1.1',
+                '43': '1.6'}
 
     def __init__(self, vbox, version, arch, fname=None):
         super().__init__(vbox, version, arch)
@@ -1252,7 +1253,7 @@ DISTROS = {'ubuntu': {'username': 'ubuntu',
                       'realname': 'centos',
                       'img_class': CentosStream,
                       'amd64': 'x86_64',
-                      'default_version': '9'},
+                      'default_version': '10'},
            'debian': {'username': 'debian',
                       'realname': 'debian',
                       'img_class': Debian,

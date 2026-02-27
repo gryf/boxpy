@@ -48,11 +48,12 @@ Tested distros
 - Centos Stream
   - 8
   - 9
+  - 10
 - Debian
   - 10 (buster)
   - 11 (bullseye)
   - 12 (bookworm)
-  - 13 (trixie) - prerelease
+  - 13 (trixie)
 
 There is possibility to use whatever OS image which supports cloud-init. Use
 the ``--image`` param for ``create`` command to pass image filename, although
