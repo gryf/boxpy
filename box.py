@@ -18,7 +18,7 @@ import requests
 import yaml
 
 
-__version__ = "1.11.2"
+__version__ = "1.11.3"
 
 CACHE_DIR = os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache'))
 CLOUD_IMAGE = "ci.iso"
@@ -1827,4 +1827,7 @@ def main():
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        sys.exit(50)

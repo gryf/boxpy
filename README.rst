@@ -79,7 +79,7 @@ You'll have ``boxpy`` command created for you as well.
 .. code:: shell-session
 
    $ boxpy -V
-   boxpy 1.9.2
+   boxpy 1.11.3
 
 Other option is simply link it somewhere in the path:
 
