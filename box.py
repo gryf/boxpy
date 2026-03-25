@@ -1258,7 +1258,7 @@ DISTROS = {'ubuntu': {'username': 'ubuntu',
                       'realname': 'debian',
                       'img_class': Debian,
                       'amd64': 'amd64',
-                      'default_version': '12'}}
+                      'default_version': '13'}}
 
 
 def get_image_object(vbox, version, image='ubuntu', arch='amd64'):
