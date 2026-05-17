@@ -1146,7 +1146,8 @@ class Fedora(Image):
                 '40': '1.14',
                 '41': '1.4',
                 '42': '1.1',
-                '43': '1.6'}
+                '43': '1.6',
+                '44': '1.7'}
 
     def __init__(self, vbox, version, arch, fname=None):
         super().__init__(vbox, version, arch)
@@ -1243,12 +1244,12 @@ DISTROS = {'ubuntu': {'username': 'ubuntu',
                       'realname': 'ubuntu',
                       'img_class': Ubuntu,
                       'amd64': 'amd64',
-                      'default_version': '24.04'},
+                      'default_version': '26.04'},
            'fedora': {'username': 'fedora',
                       'realname': 'fedora',
                       'img_class': Fedora,
                       'amd64': 'x86_64',
-                      'default_version': '41'},
+                      'default_version': '44'},
            'centos': {'username': 'centos',
                       'realname': 'centos',
                       'img_class': CentosStream,

@@ -38,6 +38,7 @@ Tested distros
   - 22.04
   - 24.04
   - 25.04
+  - 26.04
 - Fedora
   - 37
   - 38
@@ -45,6 +46,8 @@ Tested distros
   - 40
   - 41
   - 42
+  - 43
+  - 44
 - Centos Stream
   - 8
   - 9
